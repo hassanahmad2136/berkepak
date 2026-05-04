@@ -1,0 +1,458 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
+import { getProductById } from "@/lib/products";
+import { formatPKR } from "@/lib/format";
+import type { Address, PaymentMethod } from "@/lib/types";
+import { sendOtp, verifyOtp } from "@/lib/actions/otp";
+import { placeOrder } from "@/lib/actions/orders";
+
+type Step = 1 | 2 | 3;
+
+type Defaults = {
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2: string;
+  city: string;
+  province: string;
+  postalCode: string;
+};
+
+export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
+  const { lines, clear } = useCart();
+  const [step, setStep] = useState<Step>(1);
+  const [address, setAddress] = useState<Address>({
+    fullName: defaults.fullName,
+    phone: defaults.phone,
+    line1: defaults.line1,
+    line2: defaults.line2,
+    city: defaults.city,
+    province: defaults.province,
+    postalCode: defaults.postalCode,
+    country: "Pakistan",
+  });
+  const [payment, setPayment] = useState<PaymentMethod>("cod");
+  const [otpSent, setOtpSent] = useState(false);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpPending, startOtpTransition] = useTransition();
+  const [placePending, startPlaceTransition] = useTransition();
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+
+  const subtotal = useMemo(() => cartSubtotal(lines), [lines]);
+  const shipping = subtotal === 0 ? 0 : subtotal >= 10000 ? 0 : 350;
+  const total = subtotal + shipping;
+
+  if (placedOrderId) {
+    return <Confirmation orderId={placedOrderId} method={payment} total={total} />;
+  }
+
+  if (lines.length === 0) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 sm:px-8 py-24 text-center">
+        <p className="display text-3xl">Your cart is empty.</p>
+        <p className="mt-3 text-sm text-muted">
+          Add a fabric to begin checkout.
+        </p>
+        <Link href="/shop" className="btn btn-primary mt-8">
+          Shop Fabrics
+        </Link>
+      </div>
+    );
+  }
+
+  const canProceedToPayment =
+    address.fullName &&
+    address.phone &&
+    address.line1 &&
+    address.city &&
+    address.province &&
+    address.postalCode;
+
+  const handleSendOtp = () => {
+    setOtpError(null);
+    startOtpTransition(async () => {
+      const res = await sendOtp(address.phone);
+      if (res.ok) {
+        setOtpSent(true);
+        setDevOtp(res.devCode ?? null);
+      } else {
+        setOtpError(res.error ?? "Failed to send code.");
+      }
+    });
+  };
+
+  const handleVerifyOtp = () => {
+    setOtpError(null);
+    startOtpTransition(async () => {
+      const res = await verifyOtp(address.phone, otpInput);
+      if (res.ok) setOtpVerified(true);
+      else setOtpError(res.error ?? "Invalid code.");
+    });
+  };
+
+  const handlePlace = () => {
+    setPlaceError(null);
+    startPlaceTransition(async () => {
+      const res = await placeOrder({
+        lines,
+        address,
+        paymentMethod: payment,
+        otpVerified,
+      });
+      if (res.ok) {
+        setPlacedOrderId(res.orderId);
+        clear();
+      } else {
+        setPlaceError(res.error);
+      }
+    });
+  };
+
+  return (
+    <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-10">
+      <p className="eyebrow text-muted">Checkout</p>
+      <ol className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        {[
+          { n: 1, label: "Shipping" },
+          { n: 2, label: "Payment" },
+          { n: 3, label: "Review" },
+        ].map((s) => (
+          <li
+            key={s.n}
+            className={`flex items-center gap-2 ${step === s.n ? "" : "text-muted"}`}
+          >
+            <span
+              className={`flex h-6 w-6 items-center justify-center border text-xs ${
+                step >= s.n ? "bg-ink text-paper border-ink" : "border-stone"
+              }`}
+            >
+              {s.n}
+            </span>
+            <span className="uppercase tracking-[0.14em] text-xs">{s.label}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-8 grid gap-10 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          {step === 1 && (
+            <section className="space-y-4">
+              <h2 className="display text-2xl">Shipping address</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input className="input sm:col-span-2" placeholder="Full name" value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} />
+                <input className="input sm:col-span-2" placeholder="Mobile number (e.g. 03001234567)" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} />
+                <input className="input sm:col-span-2" placeholder="Address line 1" value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} />
+                <input className="input sm:col-span-2" placeholder="Address line 2 (optional)" value={address.line2 ?? ""} onChange={(e) => setAddress({ ...address, line2: e.target.value })} />
+                <input className="input" placeholder="City" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+                <input className="input" placeholder="Province" value={address.province} onChange={(e) => setAddress({ ...address, province: e.target.value })} />
+                <input className="input" placeholder="Postal code" value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} />
+                <input className="input" value="Pakistan" disabled />
+              </div>
+              <button
+                disabled={!canProceedToPayment}
+                onClick={() => setStep(2)}
+                className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Continue to Payment
+              </button>
+            </section>
+          )}
+
+          {step === 2 && (
+            <section className="space-y-6">
+              <h2 className="display text-2xl">Payment method</h2>
+
+              <label
+                className={`block border p-5 cursor-pointer ${
+                  payment === "cod" ? "border-ink" : "border-stone"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={payment === "cod"}
+                    onChange={() => setPayment("cod")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Cash on Delivery</p>
+                    <p className="mt-1 text-xs text-muted">
+                      Pay in cash when your order arrives. Mobile OTP
+                      verification required to confirm the order.
+                    </p>
+
+                    {payment === "cod" && (
+                      <div className="mt-5 border-t border-stone pt-4">
+                        <p className="eyebrow text-muted">Verify mobile</p>
+                        <p className="mt-1 text-xs text-muted">
+                          We'll send a 4-digit code to{" "}
+                          {address.phone || "your mobile"}.
+                        </p>
+                        {!otpSent ? (
+                          <button
+                            onClick={handleSendOtp}
+                            className="btn btn-ghost mt-4"
+                            disabled={otpPending}
+                          >
+                            {otpPending ? "Sending…" : "Send code"}
+                          </button>
+                        ) : otpVerified ? (
+                          <p className="mt-4 text-sm text-accent">✓ Mobile verified</p>
+                        ) : (
+                          <div className="mt-4 space-y-3">
+                            {devOtp && (
+                              <p className="text-xs bg-mist border border-stone px-3 py-2">
+                                <span className="eyebrow text-muted">Dev mode</span>
+                                <span className="ml-2">
+                                  Code: <strong>{devOtp}</strong>
+                                </span>
+                              </p>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                className="input flex-1"
+                                placeholder="Enter 4-digit code"
+                                inputMode="numeric"
+                                maxLength={4}
+                                value={otpInput}
+                                onChange={(e) => setOtpInput(e.target.value)}
+                              />
+                              <button
+                                onClick={handleVerifyOtp}
+                                className="btn btn-primary"
+                                disabled={otpPending || otpInput.length < 4}
+                              >
+                                {otpPending ? "…" : "Verify"}
+                              </button>
+                            </div>
+                            {otpError && (
+                              <p className="text-xs text-accent">{otpError}</p>
+                            )}
+                            <button
+                              onClick={handleSendOtp}
+                              className="text-xs underline text-muted"
+                              disabled={otpPending}
+                            >
+                              Resend code
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`block border p-5 cursor-pointer ${
+                  payment === "bank_transfer" ? "border-ink" : "border-stone"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={payment === "bank_transfer"}
+                    onChange={() => setPayment("bank_transfer")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      Bank Transfer (Raast / IBAN)
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      Receive bank details on the order confirmation page.
+                      Upload your transfer receipt from your account dashboard;
+                      we'll release fulfillment after manual verification.
+                    </p>
+                  </div>
+                </div>
+              </label>
+
+              <div className="flex justify-between">
+                <button onClick={() => setStep(1)} className="link-underline text-sm">
+                  ← Back
+                </button>
+                <button
+                  onClick={() => setStep(3)}
+                  disabled={payment === "cod" && !otpVerified}
+                  className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Review Order
+                </button>
+              </div>
+            </section>
+          )}
+
+          {step === 3 && (
+            <section className="space-y-6">
+              <h2 className="display text-2xl">Review &amp; place order</h2>
+
+              <div className="border border-stone p-5">
+                <div className="flex justify-between">
+                  <p className="eyebrow text-muted">Shipping to</p>
+                  <button
+                    onClick={() => setStep(1)}
+                    className="text-xs underline text-muted"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <p className="mt-2 text-sm">{address.fullName}</p>
+                <p className="text-sm text-muted">
+                  {address.line1}
+                  {address.line2 ? `, ${address.line2}` : ""}, {address.city},{" "}
+                  {address.province} {address.postalCode}
+                </p>
+                <p className="text-sm text-muted">{address.phone}</p>
+              </div>
+
+              <div className="border border-stone p-5">
+                <div className="flex justify-between">
+                  <p className="eyebrow text-muted">Payment</p>
+                  <button
+                    onClick={() => setStep(2)}
+                    className="text-xs underline text-muted"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <p className="mt-2 text-sm">
+                  {payment === "cod"
+                    ? "Cash on Delivery (mobile verified)"
+                    : "Bank Transfer — receipt upload required"}
+                </p>
+              </div>
+
+              <button
+                onClick={handlePlace}
+                className="btn btn-primary w-full"
+                disabled={placePending}
+              >
+                {placePending ? "Placing order…" : `Place order — ${formatPKR(total)}`}
+              </button>
+              {placeError && (
+                <p className="text-xs text-accent text-center">{placeError}</p>
+              )}
+            </section>
+          )}
+        </div>
+
+        <aside className="lg:sticky lg:top-28 lg:self-start border border-stone p-5">
+          <p className="eyebrow text-muted">Order summary</p>
+          <ul className="mt-4 divide-y divide-stone">
+            {lines.map((line) => {
+              const product = getProductById(line.productId);
+              if (!product) return null;
+              return (
+                <li
+                  key={`${line.productId}-${line.unit}-${line.stitching}`}
+                  className="flex gap-3 py-3"
+                >
+                  <div className="relative h-16 w-12 shrink-0 bg-mist overflow-hidden">
+                    <Image
+                      src={product.images[0]}
+                      alt={product.name}
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    <p className="truncate">{product.name}</p>
+                    <p className="text-xs text-muted">
+                      {line.quantity} × by the {line.unit}
+                      {line.stitching === "bespoke" && " · Bespoke"}
+                    </p>
+                  </div>
+                  <p className="text-sm">{formatPKR(lineSubtotal(line))}</p>
+                </li>
+              );
+            })}
+          </ul>
+          <dl className="mt-4 space-y-2 border-t border-stone pt-4 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted">Subtotal</dt>
+              <dd>{formatPKR(subtotal)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Shipping</dt>
+              <dd>{shipping === 0 ? "Free" : formatPKR(shipping)}</dd>
+            </div>
+            <div className="flex justify-between border-t border-stone pt-3 text-base">
+              <dt>Total</dt>
+              <dd>{formatPKR(total)}</dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Confirmation({
+  orderId,
+  method,
+  total,
+}: {
+  orderId: string;
+  method: PaymentMethod;
+  total: number;
+}) {
+  return (
+    <div className="mx-auto max-w-2xl px-4 sm:px-8 py-24 text-center">
+      <p className="eyebrow text-muted">Order confirmed</p>
+      <h1 className="display mt-3 text-4xl">Thank you.</h1>
+      <p className="mt-3 text-sm text-muted">
+        Order <strong>{orderId}</strong> — {formatPKR(total)}.
+      </p>
+
+      {method === "bank_transfer" && (
+        <div className="mt-10 border border-stone p-6 text-left">
+          <p className="eyebrow text-muted">Bank Transfer Details</p>
+          <dl className="mt-4 grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+            <dt className="text-muted">Bank</dt>
+            <dd>Meezan Bank</dd>
+            <dt className="text-muted">Account Title</dt>
+            <dd>Berke Pak Fabrics (Pvt) Ltd</dd>
+            <dt className="text-muted">IBAN</dt>
+            <dd className="font-mono">PK00MEZN0000000000000000</dd>
+            <dt className="text-muted">Raast ID</dt>
+            <dd>03000000000</dd>
+          </dl>
+          <p className="mt-4 text-xs text-muted">
+            Once you've transferred, upload your receipt from{" "}
+            <Link href="/account/receipts" className="link-underline">
+              Account → Receipts
+            </Link>
+            . We'll release fulfillment after manual verification.
+          </p>
+        </div>
+      )}
+
+      {method === "cod" && (
+        <p className="mt-6 text-sm text-muted">
+          You'll receive an SMS with tracking once the order ships.
+        </p>
+      )}
+
+      <div className="mt-10 flex justify-center gap-3">
+        <Link href="/account/orders" className="btn btn-ghost">
+          View Order
+        </Link>
+        <Link href="/shop" className="btn btn-primary">
+          Continue Shopping
+        </Link>
+      </div>
+    </div>
+  );
+}
