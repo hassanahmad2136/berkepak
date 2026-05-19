@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { NewsletterForm } from "./NewsletterForm";
 
 export function Footer() {
@@ -6,6 +7,13 @@ export function Footer() {
     <footer className="border-t border-stone mt-24">
       <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-16 grid gap-12 md:grid-cols-4">
         <div className="md:col-span-2">
+          <Image
+            src="/logo.png"
+            alt="Berke Pak"
+            width={180}
+            height={48}
+            className="mb-6 h-10 w-auto"
+          />
           <p className="display text-2xl tracking-[-0.03em]">
             Editorial fabrics, woven with intent.
           </p>
@@ -37,8 +45,15 @@ export function Footer() {
         </div>
       </div>
       <div className="border-t border-stone">
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted">
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
           <p>© {new Date().getFullYear()} Berke Pak Fabrics. All rights reserved.</p>
+          <Image
+            src="/payment-methods.png"
+            alt="Accepted payment methods"
+            width={240}
+            height={24}
+            className="h-5 w-auto opacity-70"
+          />
           <p className="flex gap-6">
             <Link className="link-underline" href="/legal/privacy">Privacy</Link>
             <Link className="link-underline" href="/legal/terms">Terms</Link>

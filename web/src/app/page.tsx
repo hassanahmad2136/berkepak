@@ -12,7 +12,7 @@ export default function HomePage() {
     <>
       <section className="relative h-[88dvh] w-full overflow-hidden">
         <Image
-          src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=2400&q=85"
+          src="/hero/banner-1.jpg"
           alt="Editorial fabric drape"
           fill
           priority
@@ -133,6 +133,25 @@ export default function HomePage() {
               </span>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="border-t border-stone">
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-14">
+          <p className="eyebrow text-muted text-center">Mills &amp; Partners</p>
+          <div className="mt-8 grid grid-cols-3 items-center gap-x-8 gap-y-10 sm:grid-cols-6">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div key={n} className="relative h-10 opacity-60 transition-opacity hover:opacity-100">
+                <Image
+                  src={`/brands/brand-${n}.png`}
+                  alt={`Partner mill ${n}`}
+                  fill
+                  sizes="(min-width: 640px) 16vw, 33vw"
+                  className="object-contain"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

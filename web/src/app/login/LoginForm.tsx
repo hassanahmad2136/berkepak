@@ -28,7 +28,7 @@ export function LoginForm({ next }: { next?: string }) {
         required
         autoComplete="current-password"
       />
-      {state?.error && (
+      {state && "error" in state && (
         <p className="text-xs text-accent">{state.error}</p>
       )}
       <button type="submit" className="btn btn-primary w-full" disabled={pending}>

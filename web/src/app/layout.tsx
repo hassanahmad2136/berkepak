@@ -6,6 +6,7 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { Analytics } from "@/components/Analytics";
+import { AuthListener } from "@/components/AuthListener";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -20,6 +21,10 @@ export const metadata: Metadata = {
   },
   description:
     "Premium raw fabrics — cotton, linen, wool, and silk — sold by the meter or by the suit. Crafted in Pakistan, delivered worldwide.",
+  icons: {
+    icon: "/logo-mark.png",
+    apple: "/logo-mark.png",
+  },
 };
 
 export default function RootLayout({
@@ -35,6 +40,7 @@ export default function RootLayout({
         <Footer />
         <CartDrawer />
         <WhatsAppButton />
+        <AuthListener />
         <Analytics />
       </body>
     </html>

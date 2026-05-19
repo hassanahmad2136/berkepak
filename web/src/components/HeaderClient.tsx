@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useCart, cartItemCount } from "@/lib/cart-store";
 
@@ -58,9 +59,17 @@ export function HeaderClient({
 
         <Link
           href="/"
-          className="display absolute left-1/2 -translate-x-1/2 text-xl tracking-[0.24em]"
+          aria-label="Berke Pak — Home"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center"
         >
-          BERKE&nbsp;PAK
+          <Image
+            src="/logo.png"
+            alt="Berke Pak"
+            width={160}
+            height={44}
+            priority
+            className="h-9 w-auto sm:h-10"
+          />
         </Link>
 
         <div className="flex items-center gap-5 text-[13px]">

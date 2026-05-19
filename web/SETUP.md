@@ -34,37 +34,42 @@ Pick **one** of the two paths.
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` → `SUPABASE_SERVICE_ROLE_KEY`
-3. Create `BerkePak/web/.env.local` and paste them in. Also set
-   `ADMIN_EMAILS=your@email.com` for the admin hub.
-4. Apply the schema:
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref <your-project-ref>
-   npx supabase db push
+3. Create `BerkePak/web/.env.local`:
    ```
-   *(Or open the SQL editor in the dashboard and paste both files in
-   `supabase/migrations/` in order.)*
-5. **Disable email confirmation for dev:** Auth → Providers → Email → toggle
-   off "Confirm email". Otherwise sign-in is blocked until you click the
-   verification link.
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
 
-#### Path B — Supabase Local (Docker required)
-1. Start Docker Desktop.
-2. From `BerkePak/web`:
-   ```bash
-   npx supabase start
-   ```
-   First run pulls ~1.5 GB of images and takes 5–10 min. It prints the URL +
-   anon key + service-role key when ready.
-3. Paste those into `BerkePak/web/.env.local`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=<from CLI output>
-   SUPABASE_SERVICE_ROLE_KEY=<from CLI output>
+   # Used by email-confirmation links + OAuth redirects.
+   # Set to your prod URL when deploying.
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+   # Comma-separated emails that get access to /admin/*
    ADMIN_EMAILS=your@email.com
    ```
-4. Migrations are applied automatically on `supabase start`.
-5. Studio (web UI): <http://127.0.0.1:54323>. Inbucket (fake email): <http://127.0.0.1:54324>.
+4. **Configure auth URLs.** Authentication → **URL Configuration**:
+   - **Site URL**: `http://localhost:3000`
+   - **Redirect URLs** → add `http://localhost:3000/auth/callback`
+5. **Email confirmation** is on by default — leave it on. The signup form now
+   shows an embedded "Check your email" panel after submit, and the link
+   in the email lands on `/auth/callback` to activate the account.
+   - Free Supabase email is rate-limited (3/hour). For local dev it's fine.
+   - In Auth → **Email Templates → Confirm signup**, the default template's
+     `{{ .ConfirmationURL }}` will respect the `emailRedirectTo` we send.
+6. Apply the schema. **SQL Editor → New query**, paste each of these in order
+   and Run:
+   - [supabase/migrations/20260505000000_init.sql](supabase/migrations/20260505000000_init.sql)
+   - [supabase/migrations/20260505000001_stitching.sql](supabase/migrations/20260505000001_stitching.sql)
+
+#### Path B — Supabase Local (Docker required)
+Start Docker Desktop, then from `BerkePak/web`:
+```bash
+npx supabase start
+```
+First run pulls ~1.5 GB of images and takes 5–10 min. The CLI prints the API URL,
+anon key, and service-role key — copy them into `.env.local` exactly as in Path A.
+Migrations run automatically. Studio at <http://127.0.0.1:54323>; intercepted
+emails at <http://127.0.0.1:54324>.
 
 ### Run the storefront
 ```bash
@@ -74,14 +79,51 @@ Open <http://localhost:3000>.
 
 ---
 
-## 2. Saleor backend (`backend/`)
+## 2. Social sign-in (Google + Apple)
+
+The buttons are **live** — clicking them initiates the OAuth flow against your
+Supabase project. They will surface a "provider is not enabled" error until
+you complete one of the setups below.
+
+### Google (free; ~5 min)
+1. Go to <https://console.cloud.google.com/apis/credentials>. Pick or create a
+   project named e.g. `berkepak`.
+2. **OAuth consent screen**:
+   - User type: **External**.
+   - App name: `Berke Pak`. Support email: yours.
+   - Scopes: leave defaults (`openid`, `email`, `profile`).
+   - Test users: add your email.
+3. **Credentials → Create Credentials → OAuth client ID**:
+   - Type: **Web application**. Name: `Berke Pak Web`.
+   - Authorized redirect URIs: add this exact URL (from Supabase →
+     Authentication → Providers → Google):
+     `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   - Click **Create**, copy the **Client ID** and **Client secret**.
+4. Back in Supabase: Authentication → **Providers → Google** → toggle on,
+   paste Client ID + Secret, **Save**.
+5. Click **Continue with Google** in the storefront — the rest is automatic.
+
+### Apple (~30 min; needs Apple Developer Program — $99/yr)
+Requires:
+- An Apple Developer account.
+- A registered App ID and a Services ID (used as the "Client ID").
+- A Sign in with Apple key (`.p8`) and a generated client secret JWT.
+
+Walkthrough: <https://supabase.com/docs/guides/auth/social-login/auth-apple>.
+The `Continue with Apple` button is wired and will work as soon as the
+credentials are in Supabase Auth → Providers → Apple.
+
+> Skip Apple unless you've already paid the Apple Developer fee — it's not a
+> 5-minute setup like Google.
+
+---
+
+## 3. Saleor backend (`backend/`)
 
 Optional today — the storefront catalog is currently served from
 `web/src/lib/products.ts`. Bring Saleor up when you want to migrate the
-catalog into a real PIM/inventory system, or to use the Saleor admin
-dashboard.
+catalog into a real PIM/inventory system.
 
-### Bring it up
 ```bash
 cd BerkePak/backend
 make init     # docker compose up -d + migrate + seed superuser
@@ -94,49 +136,37 @@ URLs once running:
 - Saleor Dashboard: <http://localhost:9000>  (login: `admin@example.com` / `admin` — change it)
 - Mailpit (intercepts dev email): <http://localhost:8025>
 
-### Connect it to the storefront *(later — not yet wired)*
-1. Saleor dashboard → Configuration → Apps → Create App, grant `MANAGE_PRODUCTS`,
-   `MANAGE_ORDERS`, `MANAGE_CHECKOUTS`. Copy the token.
-2. Add to `BerkePak/web/.env.local`:
-   ```
-   NEXT_PUBLIC_SALEOR_API_URL=http://localhost:8000/graphql/
-   SALEOR_APP_TOKEN=<token>
-   ```
-3. The catalog swap (replace `lib/products.ts` with Saleor GraphQL queries)
-   is the next milestone.
+Connecting Saleor → storefront (catalog swap) is the next milestone.
 
 ---
 
-## 3. Try the flows
+## 4. Try the flows
 
 ### Customer flow
-1. Sign up at `/signup` (any email — confirmation is off).
-2. Browse `/shop`, open a fabric, choose **By the suit + Bespoke stitching**
-   (Phase 5 toggle adds Rs 4,500/suit), Add to Cart.
-3. Checkout `/checkout`:
-   - **COD** path: enter address, request OTP — code prints to the **server
-     console** AND shows in a dev-mode banner inside the page; verify; place
-     order.
-   - **Bank Transfer** path: place order → see IBAN/Raast details on
-     confirmation → go to `/account/receipts` → upload any image. It lands in
-     Supabase Storage under `receipts/<your-user-id>/`.
-4. Inspect from `/account/orders`, `/account/profile` (save measurements for
-   bespoke), `/account/wishlist`.
+1. **Sign up** at `/signup`. Fields are all required; phone is validated as a
+   Pakistani mobile (`03XXXXXXXXX` or `+923XXXXXXXXX`).
+2. After submit you see the embedded **"Check your email"** panel. Open the
+   email Supabase sent (or in local: <http://127.0.0.1:54324>) and click the
+   link → you're dropped on `/account` signed in.
+3. **Save measurements** at `/account/profile`.
+4. **Cart + COD checkout:**
+   - Open a fabric → **By the suit + Bespoke** → Add to Cart → Checkout.
+   - Address pre-filled. Pick **Cash on Delivery**, **Send code** — the
+     4-digit OTP is logged to the dev terminal AND printed in a dev banner.
+     Verify, place order.
+5. **Bank Transfer flow:** place an order with **Bank Transfer**, see IBAN/Raast
+   on confirmation, go to `/account/receipts`, upload any image.
 
 ### Admin flow
-1. Sign in with an email listed in `ADMIN_EMAILS`.
-2. Go to `/admin` — overview shows pending receipts and open orders.
-3. `/admin/receipts` — preview each upload (signed 10-min URL), Approve
-   (flips the order to `paid` + `confirmed`) or Reject with a reason
-   (returns the order to `awaiting_receipt` so the customer can re-upload).
-4. `/admin/orders` — flat list of recent orders with payment status.
+1. Make sure your sign-up email is in `ADMIN_EMAILS` and restart the dev server.
+2. `/admin/receipts` — preview each receipt via signed URL, **Approve** (flips
+   order to `paid` + `confirmed`) or **Reject** with a reason (returns the
+   order to `awaiting_receipt`).
 
 ---
 
-## What's stubbed (not blocking the dev flow)
+## 5. What's stubbed (not blocking the dev flow)
 
-- **OAuth (Google / Apple)** — buttons disabled. Wiring requires provider
-  config in Supabase Auth settings.
 - **SMS provider for OTP** — currently logs the code server-side and (in dev)
   returns it to the UI. Drop in Twilio / Vonage / a PK SMS gateway in
   [`src/lib/actions/otp.ts`](src/lib/actions/otp.ts) where the comment marks

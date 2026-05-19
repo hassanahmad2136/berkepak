@@ -15,10 +15,7 @@ export const products: Product[] = [
     pricePerMeter: 1850,
     pricePerSuit: 6800,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=80",
-      "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600&q=80",
-    ],
+    images: ["/products/p-001-a.jpg", "/products/p-001-b.jpg"],
     shortDescription: "Crisp, breathable poplin with a quiet sheen.",
     description:
       "An everyday foundation cloth woven from long-staple Egyptian cotton. Tightly spun yarns deliver a clean drape and a subtle, natural sheen — equally at home in summer kurtas and tailored shirting.",
@@ -39,10 +36,7 @@ export const products: Product[] = [
     pricePerMeter: 4250,
     pricePerSuit: 15400,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=1600&q=80",
-      "https://images.unsplash.com/photo-1551232864-3f0890e580d9?w=1600&q=80",
-    ],
+    images: ["/products/p-002-a.jpg", "/products/p-002-b.jpg"],
     shortDescription: "Mid-weight merino with a soft diagonal hand.",
     description:
       "A versatile suiting wool with a fine 2/2 twill. The yarn is mill-finished for a soft hand without sacrificing structure — ideal for jackets, trousers, and unstitched winter sets.",
@@ -62,10 +56,7 @@ export const products: Product[] = [
     pricePerMeter: 2400,
     pricePerSuit: 8600,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1565084888279-aca607ecce0c?w=1600&q=80",
-      "https://images.unsplash.com/photo-1605518216938-7c31b7b14ad0?w=1600&q=80",
-    ],
+    images: ["/products/p-003-a.jpg", "/products/p-003-b.jpg"],
     shortDescription: "Slow-spun European flax with a lived-in fall.",
     description:
       "Woven in a mid-weight plain construction, this linen settles into a soft, broken-in drape after the first wash. Honest texture, irregular slubs, and a quiet ecru tone.",
@@ -85,10 +76,7 @@ export const products: Product[] = [
     pricePerMeter: 5200,
     pricePerSuit: 18800,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1600&q=80",
-      "https://images.unsplash.com/photo-1617137968427-85924c800a22?w=1600&q=80",
-    ],
+    images: ["/products/p-004-a.jpg", "/products/p-004-b.jpg"],
     shortDescription: "Heavyweight silk with a deep liquid lustre.",
     description:
       "A 19 momme mulberry silk satin with a fluid, weighted drape. The dense satin face produces a deep, mirror-like reflection in low light — reserved for formal kurtas and evening shararas.",
@@ -108,10 +96,7 @@ export const products: Product[] = [
     pricePerMeter: 2150,
     pricePerSuit: 7600,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=1600&q=80",
-      "https://images.unsplash.com/photo-1596703263926-eb0762ee17e4?w=1600&q=80",
-    ],
+    images: ["/products/p-005-a.jpg", "/products/p-005-b.jpg"],
     shortDescription: "Tonal jacquard with an architectural relief.",
     description:
       "A self-coloured jacquard with a low-relief geometric pattern. The viscose pickup softens the cotton ground for a smooth hand and gentle sheen.",
@@ -131,10 +116,7 @@ export const products: Product[] = [
     pricePerMeter: 1650,
     pricePerSuit: 6000,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1612215047504-a5b32413ed94?w=1600&q=80",
-      "https://images.unsplash.com/photo-1583744946564-b52ac1c389c8?w=1600&q=80",
-    ],
+    images: ["/products/p-006-a.jpg", "/products/p-006-b.jpg"],
     shortDescription: "Subtle dobby texture in deep charcoal.",
     description:
       "A finely woven cotton dobby with a textured grid that catches the light at close range while reading solid from across the room.",
@@ -153,10 +135,7 @@ export const products: Product[] = [
     pricePerMeter: 4900,
     pricePerSuit: 17600,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=1600&q=80",
-      "https://images.unsplash.com/photo-1606503153255-59d8b8b67e91?w=1600&q=80",
-    ],
+    images: ["/products/p-007-a.jpg", "/products/p-007-b.jpg"],
     shortDescription: "Brushed wool-cashmere with a soft halo.",
     description:
       "A heavily brushed flannel with cashmere content for an unusually soft hand. The rust tone has been built up in two dye passes for depth.",
@@ -176,10 +155,7 @@ export const products: Product[] = [
     pricePerMeter: 3800,
     pricePerSuit: 13600,
     metersPerSuit: 3.5,
-    images: [
-      "https://images.unsplash.com/photo-1583846783214-7229a91b20ed?w=1600&q=80",
-      "https://images.unsplash.com/photo-1603252109612-24fa03d145c8?w=1600&q=80",
-    ],
+    images: ["/products/p-008-a.jpg", "/products/p-008-b.jpg"],
     shortDescription: "Crisp, airy organza with a soft glow.",
     description:
       "A finely woven silk organza — sheer, structured, and luminous. Used for layered dupattas, formal overlays, and sculptural sleeves.",

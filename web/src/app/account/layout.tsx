@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { logoutAction } from "@/lib/actions/auth";
 import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { LogoutButton } from "@/components/LogoutButton";
 
 const NAV = [
   { href: "/account", label: "Overview" },
@@ -51,11 +51,7 @@ export default async function AccountLayout({
                 {n.label}
               </Link>
             ))}
-            <form action={logoutAction}>
-              <button className="text-left px-3 py-2 link-underline text-muted whitespace-nowrap w-full">
-                Sign out
-              </button>
-            </form>
+            <LogoutButton />
           </nav>
         </aside>
         <div>{children}</div>
