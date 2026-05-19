@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { getProductById } from "@/lib/products";
+import { getProductByIdAsync } from "@/lib/products";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
   type Address,
@@ -37,9 +37,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   }
 
   // Recompute totals server-side so the client cannot tamper with prices.
-  let subtotal = 0;
-  const items = input.lines.map((line) => {
-    const product = getProductById(line.productId);
+  const items = await Promise.all(input.lines.map(async (line) => {
+    const product = await getProductByIdAsync(line.productId);
     if (!product) throw new Error(`Unknown product ${line.productId}`);
     const unitPrice =
       line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
@@ -48,7 +47,6 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         ? BESPOKE_STITCHING_ADDON_PKR
         : 0;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
-    subtotal += lineTotal;
     return {
       product_id: product.id,
       product_name: product.name,
@@ -60,8 +58,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching_addon: stitchingAddon,
       line_total: lineTotal,
     };
-  });
+  }));
 
+  const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
   const shipping = subtotal >= 10_000 ? 0 : 350;
   const total = subtotal + shipping;
   const orderId = newOrderId();

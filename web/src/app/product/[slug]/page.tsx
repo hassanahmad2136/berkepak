@@ -2,20 +2,21 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getProductBySlug, products } from "@/lib/products";
+import { getProductBySlugAsync, getProducts } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
 import { AddToCart } from "./AddToCart";
 
 export async function generateStaticParams() {
-  return products.map((p) => ({ slug: p.slug }));
+  const allProducts = await getProducts();
+  return allProducts.map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata(props: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await props.params;
-  const product = getProductBySlug(slug);
+  const product = await getProductBySlugAsync(slug);
   if (!product) return { title: "Fabric not found" };
   const title = `${product.name} — ${product.composition}`;
   const description = `${product.shortDescription} ${product.gsm} GSM ${product.weave} weave in ${product.colorName}. ${formatPKR(product.pricePerMeter)} per meter.`;
@@ -36,10 +37,11 @@ export default async function ProductPage(props: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await props.params;
-  const product = getProductBySlug(slug);
+  const product = await getProductBySlugAsync(slug);
   if (!product) notFound();
 
-  const related = products
+  const allProducts = await getProducts();
+  const related = allProducts
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 4);
 

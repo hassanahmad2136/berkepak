@@ -1,6 +1,31 @@
-import type { Product } from "./types";
+/**
+ * Product data-access layer.
+ *
+ * Tries Saleor GraphQL first; falls back to the static catalog below
+ * when the backend is unavailable or not configured. This means the
+ * storefront never shows an empty page regardless of backend status.
+ */
 
-export const products: Product[] = [
+import type { Product } from "./types";
+import { isSaleorConfigured, saleorFetch, SaleorError } from "./saleor/client";
+import { PRODUCTS_QUERY, PRODUCT_BY_SLUG_QUERY } from "./saleor/queries";
+import {
+  transformProducts,
+  transformProduct,
+  type SaleorProductsResponse,
+  type SaleorSingleProductResponse,
+} from "./saleor/transforms";
+
+// ---------------------------------------------------------------------------
+// Default channel slug used by the Saleor backend
+// ---------------------------------------------------------------------------
+const CHANNEL = process.env.NEXT_PUBLIC_SALEOR_CHANNEL ?? "default-channel";
+
+// =========================================================================
+// Static fallback catalog (the original 8 products)
+// =========================================================================
+
+const STATIC_PRODUCTS: Product[] = [
   {
     id: "p-001",
     slug: "ivory-poplin-cotton",
@@ -163,18 +188,161 @@ export const products: Product[] = [
   },
 ];
 
+// =========================================================================
+// In-memory product cache (for synchronous client-side lookups)
+// =========================================================================
+
+/**
+ * Once the first server-side fetch resolves, we cache the product list
+ * in a module-level Map. Client components (`CartDrawer`, `CheckoutFlow`)
+ * that need synchronous `getProductById` read from this cache.
+ *
+ * The cache is always pre-populated with the static products so there is
+ * never a period where lookups return undefined unexpectedly.
+ */
+let cachedProducts: Product[] = STATIC_PRODUCTS;
+const productMapById = new Map<string, Product>(
+  STATIC_PRODUCTS.map((p) => [p.id, p]),
+);
+const productMapBySlug = new Map<string, Product>(
+  STATIC_PRODUCTS.map((p) => [p.slug, p]),
+);
+
+function updateCache(products: Product[]) {
+  cachedProducts = products;
+  productMapById.clear();
+  productMapBySlug.clear();
+  for (const p of products) {
+    productMapById.set(p.id, p);
+    productMapBySlug.set(p.slug, p);
+  }
+}
+
+// =========================================================================
+// Async data-fetching functions (used by Server Components / Actions)
+// =========================================================================
+
+/**
+ * Fetch all products. Tries Saleor first; falls back to static.
+ */
+export async function getProducts(): Promise<Product[]> {
+  if (!isSaleorConfigured()) return STATIC_PRODUCTS;
+
+  try {
+    const data = await saleorFetch<SaleorProductsResponse>(PRODUCTS_QUERY, {
+      channel: CHANNEL,
+      first: 100,
+    });
+    const products = transformProducts(data);
+    if (products.length > 0) {
+      updateCache(products);
+      return products;
+    }
+  } catch (err) {
+    if (err instanceof SaleorError) {
+      console.warn("[BerkePak] Saleor unavailable, using static catalog:", err.message);
+    } else {
+      console.warn("[BerkePak] Saleor fetch failed, using static catalog:", err);
+    }
+  }
+
+  return STATIC_PRODUCTS;
+}
+
+/**
+ * Fetch a single product by slug. Tries Saleor first; falls back to static.
+ */
+export async function getProductBySlugAsync(
+  slug: string,
+): Promise<Product | undefined> {
+  if (!isSaleorConfigured()) {
+    return STATIC_PRODUCTS.find((p) => p.slug === slug);
+  }
+
+  try {
+    const data = await saleorFetch<SaleorSingleProductResponse>(
+      PRODUCT_BY_SLUG_QUERY,
+      { slug, channel: CHANNEL },
+    );
+    if (data.product) {
+      const product = transformProduct(data.product);
+      // Update cache entry
+      productMapById.set(product.id, product);
+      productMapBySlug.set(product.slug, product);
+      return product;
+    }
+  } catch (err) {
+    console.warn("[BerkePak] Saleor slug lookup failed, using static:", err);
+  }
+
+  return STATIC_PRODUCTS.find((p) => p.slug === slug);
+}
+
+/**
+ * Fetch a single product by ID. Async variant used by server actions.
+ */
+export async function getProductByIdAsync(
+  id: string,
+): Promise<Product | undefined> {
+  // For ID-based lookups we use the cached map (populated by getProducts)
+  // rather than hitting Saleor again. If the cache is stale, the worst case
+  // is a 60-second delay before the next ISR revalidation.
+  if (productMapById.has(id)) return productMapById.get(id);
+
+  // If the cache doesn't have it, try a full product fetch to refresh cache.
+  await getProducts();
+  return productMapById.get(id);
+}
+
+/** Async new arrivals. */
+export async function getNewArrivalsAsync(): Promise<Product[]> {
+  const all = await getProducts();
+  return all.filter((p) => p.isNew);
+}
+
+/** Async featured. */
+export async function getFeaturedAsync(): Promise<Product[]> {
+  const all = await getProducts();
+  return all.filter((p) => p.isFeatured);
+}
+
+// =========================================================================
+// Synchronous accessors (for client components reading cached data)
+// =========================================================================
+
+/**
+ * Synchronous product array — returns whatever is currently cached.
+ * @deprecated Prefer `await getProducts()` in server components.
+ */
+export const products: Product[] = STATIC_PRODUCTS;
+
+/**
+ * Synchronous slug lookup from cache. Used by server components that
+ * already called getProducts() earlier.
+ */
 export function getProductBySlug(slug: string): Product | undefined {
-  return products.find((p) => p.slug === slug);
+  return productMapBySlug.get(slug) ?? STATIC_PRODUCTS.find((p) => p.slug === slug);
 }
 
+/**
+ * Synchronous ID lookup from cache. Safe for client components.
+ */
 export function getProductById(id: string): Product | undefined {
-  return products.find((p) => p.id === id);
+  return productMapById.get(id) ?? STATIC_PRODUCTS.find((p) => p.id === id);
 }
 
+/**
+ * Synchronous new arrivals from cache.
+ * @deprecated Prefer `await getNewArrivalsAsync()` in server components.
+ */
 export function getNewArrivals(): Product[] {
-  return products.filter((p) => p.isNew);
+  return cachedProducts.filter((p) => p.isNew);
 }
 
+/**
+ * Synchronous featured from cache.
+ * @deprecated Prefer `await getFeaturedAsync()` in server components.
+ */
 export function getFeatured(): Product[] {
-  return products.filter((p) => p.isFeatured);
+  return cachedProducts.filter((p) => p.isFeatured);
 }
