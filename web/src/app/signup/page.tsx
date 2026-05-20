@@ -11,7 +11,7 @@ export default function SignupPage() {
       <p className="eyebrow text-muted">Account</p>
       <h1 className="display mt-2 text-4xl">Create account</h1>
       <p className="mt-2 text-sm text-muted">
-        Track orders, manage receipts, and save measurements for bespoke stitching.
+        Track orders, manage receipts, and save items to your wishlist.
       </p>
 
       <SignupForm />

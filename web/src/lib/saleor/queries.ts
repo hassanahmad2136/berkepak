@@ -101,3 +101,109 @@ export const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// Checkout mutations (Phase 4 — Saleor inventory sync)
+// ---------------------------------------------------------------------------
+
+export const CHECKOUT_CREATE_MUTATION = /* GraphQL */ `
+  mutation CheckoutCreate($channel: String!, $lines: [CheckoutLineInput!]!) {
+    checkoutCreate(input: { channel: $channel, lines: $lines }) {
+      checkout {
+        id
+        shippingMethods {
+          id
+          name
+        }
+      }
+      errors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
+export const CHECKOUT_SHIPPING_ADDRESS_UPDATE_MUTATION = /* GraphQL */ `
+  mutation CheckoutShippingAddressUpdate(
+    $id: ID!
+    $shippingAddress: AddressInput!
+  ) {
+    checkoutShippingAddressUpdate(
+      id: $id
+      shippingAddress: $shippingAddress
+    ) {
+      checkout {
+        id
+        shippingMethods {
+          id
+          name
+        }
+      }
+      errors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
+export const CHECKOUT_BILLING_ADDRESS_UPDATE_MUTATION = /* GraphQL */ `
+  mutation CheckoutBillingAddressUpdate(
+    $id: ID!
+    $billingAddress: AddressInput!
+  ) {
+    checkoutBillingAddressUpdate(
+      id: $id
+      billingAddress: $billingAddress
+    ) {
+      checkout {
+        id
+      }
+      errors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
+export const CHECKOUT_DELIVERY_METHOD_UPDATE_MUTATION = /* GraphQL */ `
+  mutation CheckoutDeliveryMethodUpdate(
+    $id: ID!
+    $deliveryMethodId: ID!
+  ) {
+    checkoutDeliveryMethodUpdate(
+      id: $id
+      deliveryMethodId: $deliveryMethodId
+    ) {
+      checkout {
+        id
+      }
+      errors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
+export const CHECKOUT_COMPLETE_MUTATION = /* GraphQL */ `
+  mutation CheckoutComplete($id: ID!) {
+    checkoutComplete(id: $id) {
+      order {
+        id
+        number
+      }
+      errors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;

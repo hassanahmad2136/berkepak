@@ -6,16 +6,16 @@ export default async function ProfilePage() {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
 
-  const [{ data: profile }, { data: measurements }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", userId!).maybeSingle(),
-    supabase.from("measurements").select("*").eq("user_id", userId!).maybeSingle(),
-  ]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId!)
+    .maybeSingle();
 
   return (
     <ProfileForms
       email={userData.user?.email ?? ""}
       profile={profile}
-      measurements={measurements}
     />
   );
 }

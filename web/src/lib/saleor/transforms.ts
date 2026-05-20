@@ -114,6 +114,18 @@ function variantPrice(
   return chosen?.pricing?.price?.gross.amount ?? 0;
 }
 
+function variantId(
+  variants: SaleorVariant[],
+  pattern: string,
+): string | undefined {
+  const match = variants.find(
+    (v) =>
+      v.name.toLowerCase().includes(pattern) ||
+      (v.sku ?? "").toLowerCase().includes(pattern),
+  );
+  return match?.id;
+}
+
 // ---------------------------------------------------------------------------
 // Main transform
 // ---------------------------------------------------------------------------
@@ -188,6 +200,8 @@ export function transformProduct(node: SaleorProductNode): Product {
     isNew: boolAttr(a, "is-new"),
     isFeatured: boolAttr(a, "is-featured"),
     available: node.isAvailableForPurchase ?? true,
+    meterVariantId: variantId(node.variants, "meter"),
+    suitVariantId: variantId(node.variants, "suit"),
   };
 }
 

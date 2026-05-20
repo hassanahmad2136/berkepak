@@ -25,6 +25,8 @@ export interface Product {
   isNew?: boolean;
   isFeatured?: boolean;
   available: boolean;
+  meterVariantId?: string;
+  suitVariantId?: string;
 }
 
 export interface CartLine {

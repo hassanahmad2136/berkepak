@@ -29,7 +29,7 @@ export class SaleorError extends Error {
 export async function saleorFetch<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {},
-  options: { revalidate?: number; cache?: RequestCache; tags?: string[] } = {},
+  options: { revalidate?: number; cache?: RequestCache; tags?: string[]; timeout?: number } = {},
 ): Promise<T> {
   if (!SALEOR_API_URL) {
     throw new SaleorError(
@@ -46,7 +46,7 @@ export async function saleorFetch<T = unknown>(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2500);
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout ?? 2500);
 
   try {
     const res = await fetch(SALEOR_API_URL, {

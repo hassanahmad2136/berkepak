@@ -174,10 +174,9 @@ export default async function HomePage() {
             </p>
           </div>
           <div>
-            <p className="eyebrow">Bespoke Stitching</p>
+            <p className="eyebrow">Heritage Quality</p>
             <p className="mt-3 text-muted">
-              Add a measurement profile at checkout and receive a finished
-              garment, tailored to your spec.
+              Sourced directly from historical craft regions, curated to ensure the finest weaves.
             </p>
           </div>
         </div>

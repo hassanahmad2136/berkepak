@@ -37,20 +37,12 @@ export default async function AccountOverviewPage() {
 
       <section>
         <h2 className="display text-2xl">Quick actions</h2>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <ul className="mt-4 grid gap-3 max-w-md">
           <li>
             <Link href="/account/receipts" className="block border border-stone p-5 hover:border-ink">
               <p className="text-sm font-medium">Upload bank transfer receipt</p>
               <p className="mt-1 text-xs text-muted">
                 Submit your transaction screenshot for manual verification.
-              </p>
-            </Link>
-          </li>
-          <li>
-            <Link href="/account/profile" className="block border border-stone p-5 hover:border-ink">
-              <p className="text-sm font-medium">Add measurement profile</p>
-              <p className="mt-1 text-xs text-muted">
-                Save chest, shoulder, sleeve and length for bespoke stitching.
               </p>
             </Link>
           </li>

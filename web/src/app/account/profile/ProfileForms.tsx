@@ -16,16 +16,13 @@ type Measurements = {
 export function ProfileForms({
   email,
   profile,
-  measurements,
 }: {
   email: string;
   profile: Profile;
-  measurements: Measurements;
 }) {
   return (
     <div className="space-y-12">
       <ProfileSection email={email} profile={profile} />
-      <MeasurementsSection measurements={measurements} />
     </div>
   );
 }
