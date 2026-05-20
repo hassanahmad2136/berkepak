@@ -45,33 +45,45 @@ export async function saleorFetch<T = unknown>(
     headers["Authorization"] = `Bearer ${SALEOR_APP_TOKEN}`;
   }
 
-  const res = await fetch(SALEOR_API_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query, variables }),
-    next: {
-      revalidate: options.revalidate ?? 60, // ISR: refetch every 60 s
-      tags: options.tags,
-    },
-    cache: options.cache,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-  if (!res.ok) {
-    throw new SaleorError(
-      `Saleor HTTP ${res.status}: ${res.statusText}`,
-    );
+  try {
+    const res = await fetch(SALEOR_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+      next: {
+        revalidate: options.revalidate ?? 60, // ISR: refetch every 60 s
+        tags: options.tags,
+      },
+      cache: options.cache,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new SaleorError(`Saleor HTTP ${res.status}: ${res.statusText}`);
+    }
+
+    const json = await res.json();
+
+    if (json.errors?.length) {
+      throw new SaleorError(
+        `Saleor GraphQL error: ${json.errors[0].message}`,
+        json.errors,
+      );
+    }
+
+    return json.data as T;
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    if ((err as Error).name === "AbortError") {
+      throw new SaleorError("Saleor connection timed out. Backend might be offline.");
+    }
+    throw err;
   }
-
-  const json = await res.json();
-
-  if (json.errors?.length) {
-    throw new SaleorError(
-      `Saleor GraphQL error: ${json.errors[0].message}`,
-      json.errors,
-    );
-  }
-
-  return json.data as T;
 }
 
 /** Returns `true` when the Saleor env vars are configured. */

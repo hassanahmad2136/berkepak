@@ -12,10 +12,17 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 
-# Environment
+# Environment & Secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.rsa
+*.cert
+secrets.json
+auth.json
+.supa*
 
 # Logs
 *.log
