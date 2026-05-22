@@ -19,6 +19,7 @@ export default async function HomePage() {
           alt="Editorial fabric drape"
           fill
           priority
+          fetchPriority="high"
           sizes="100vw"
           className="object-cover"
         />

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
 import { getProductById, getProductBySlug } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export function CartDrawer() {
   const { isOpen, close, lines, setQuantity, remove } = useCart();

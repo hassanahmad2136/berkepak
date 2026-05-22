@@ -107,8 +107,8 @@ export const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
 // ---------------------------------------------------------------------------
 
 export const CHECKOUT_CREATE_MUTATION = /* GraphQL */ `
-  mutation CheckoutCreate($channel: String!, $lines: [CheckoutLineInput!]!) {
-    checkoutCreate(input: { channel: $channel, lines: $lines }) {
+  mutation CheckoutCreate($channel: String!, $lines: [CheckoutLineInput!]!, $email: String!) {
+    checkoutCreate(input: { channel: $channel, lines: $lines, email: $email }) {
       checkout {
         id
         shippingMethods {

@@ -184,7 +184,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     try {
       const createRes = await saleorFetch<SaleorCheckoutCreateResponse>(
         CHECKOUT_CREATE_MUTATION,
-        { channel: CHANNEL, lines: checkoutLines },
+        { channel: CHANNEL, lines: checkoutLines, email: `${input.address.phone.replace(/[^0-9]/g, "")}@berkepak.local` },
         mutationOpts,
       );
       if (createRes.checkoutCreate.errors.length > 0) {
@@ -272,7 +272,6 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     total,
     shipping_address: input.address,
     otp_verified: input.otpVerified,
-    ...(saleorOrderId ? { saleor_order_id: saleorOrderId } : {}),
   });
   if (orderErr) return { ok: false, error: orderErr.message };
 
