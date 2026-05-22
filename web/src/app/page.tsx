@@ -139,31 +139,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-t border-stone">
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-14">
-          <p className="eyebrow text-muted text-center">Mills &amp; Partners</p>
-          <div className="mt-8 grid grid-cols-3 items-center gap-x-8 gap-y-10 sm:grid-cols-6">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} className="relative h-10 opacity-60 transition-opacity hover:opacity-100">
-                <Image
-                  src={`/brands/brand-${n}.png`}
-                  alt={`Partner mill ${n}`}
-                  fill
-                  sizes="(min-width: 640px) 16vw, 33vw"
-                  className="object-contain"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="border-y border-stone">
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-16 grid gap-10 sm:grid-cols-3 text-sm">
           <div>
-            <p className="eyebrow">Ships from Karachi</p>
+            <p className="eyebrow">Ships from Lahore</p>
             <p className="mt-3 text-muted">
-              Free domestic shipping over Rs 10,000. Worldwide DHL on request.
+              Free domestic shipping over Rs 10,000. Worldwide DHL on request (coming soon).
             </p>
           </div>
           <div>

@@ -19,7 +19,7 @@ export async function generateMetadata(props: {
   const product = await getProductBySlugAsync(slug);
   if (!product) return { title: "Fabric not found" };
   const title = `${product.name} — ${product.composition}`;
-  const description = `${product.shortDescription} ${product.gsm} GSM ${product.weave} weave in ${product.colorName}. ${formatPKR(product.pricePerMeter)} per meter.`;
+  const description = `${product.shortDescription} ${product.gsm} GSM ${product.weave} weave in ${product.colorName}. ${formatPKR(product.pricePerSuit)} per suit (${product.metersPerSuit}m).`;
   return {
     title,
     description,
@@ -81,11 +81,14 @@ export default async function ProductPage(props: {
           <h1 className="display mt-2 text-4xl sm:text-5xl">{product.name}</h1>
 
           <div className="mt-6 flex items-baseline gap-3">
-            <p className="text-2xl">{formatPKR(product.pricePerMeter)}</p>
-            <p className="text-xs text-muted uppercase tracking-[0.14em]">/ meter</p>
-            <span className="mx-2 text-stone">·</span>
-            <p className="text-base">{formatPKR(product.pricePerSuit)}</p>
-            <p className="text-xs text-muted uppercase tracking-[0.14em]">/ suit ({product.metersPerSuit}m)</p>
+            <p className="text-2xl">{formatPKR(product.pricePerSuit)}</p>
+            <p className="text-xs text-muted uppercase tracking-[0.14em]">/ suit</p>
+          </div>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-stone/40 bg-stone/5 px-3 py-1 text-xs text-muted">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+            <span>{product.metersPerSuit} meters standard cut</span>
           </div>
 
           <p className="mt-6 text-sm text-ink-soft leading-relaxed">
@@ -128,7 +131,7 @@ export default async function ProductPage(props: {
               <span aria-hidden>+</span>
             </summary>
             <p className="mt-3 text-muted leading-relaxed">
-              Ships from Karachi within 2 business days. Free domestic shipping
+              Ships from Lahore within 2 business days. Free domestic shipping
               over Rs 10,000. Returns accepted on uncut lengths within 7 days.
             </p>
           </details>

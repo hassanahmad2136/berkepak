@@ -120,23 +120,21 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
     // If it's a static fallback product ID (starts with "p-"), try to upgrade it
     // to the matching live Saleor product by slug so variant IDs resolve successfully.
-    if (product.id.startsWith("p-") || !product.meterVariantId) {
+    if (product.id.startsWith("p-") || !product.suitVariantId) {
       const liveProduct = getProductBySlug(product.slug);
       if (liveProduct && !liveProduct.id.startsWith("p-")) {
         product = liveProduct;
       }
     }
 
-    const unitPrice =
-      line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
+    const unitPrice = product.pricePerSuit;
     const stitchingAddon =
-      line.stitching === "bespoke" && line.unit === "suit"
+      line.stitching === "bespoke"
         ? BESPOKE_STITCHING_ADDON_PKR
         : 0;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
-    const variantId =
-      line.unit === "meter" ? product.meterVariantId : product.suitVariantId;
+    const variantId = product.suitVariantId;
 
     return {
       product_id: product.id,
