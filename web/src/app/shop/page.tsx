@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
-import { products } from "@/lib/products";
+import { getProducts } from "@/lib/products";
 import type { FabricCategory, FabricWeave } from "@/lib/types";
 import Link from "next/link";
 
@@ -65,7 +65,9 @@ export default async function ShopPage(props: {
   const activeWeave = params.weave as FabricWeave | undefined;
   const sort = params.sort ?? "featured";
 
-  let filtered = products.slice();
+  const allProducts = await getProducts();
+  let filtered = allProducts.slice();
+
   if (activeCategory !== "all") {
     filtered = filtered.filter((p) => p.category === activeCategory);
   }

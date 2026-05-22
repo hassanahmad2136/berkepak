@@ -1,11 +1,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ProductCard } from "@/components/ProductCard";
-import { getNewArrivals, getFeatured, products } from "@/lib/products";
+import { getNewArrivalsAsync, getFeaturedAsync, getProducts } from "@/lib/products";
 
-export default function HomePage() {
-  const newArrivals = getNewArrivals();
-  const featured = getFeatured();
+export default async function HomePage() {
+  const [newArrivals, featured, allProducts] = await Promise.all([
+    getNewArrivalsAsync(),
+    getFeaturedAsync(),
+    getProducts(),
+  ]);
   const fabricOfMonth = featured[0];
 
   return (
@@ -110,10 +113,10 @@ export default function HomePage() {
         <h2 className="display mt-2 text-3xl sm:text-4xl">Browse by material</h2>
         <div className="mt-10 grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
           {[
-            { slug: "cotton", label: "Cotton", img: products[0].images[0] },
-            { slug: "linen", label: "Linen", img: products[2].images[0] },
-            { slug: "wool", label: "Wool", img: products[1].images[0] },
-            { slug: "silk", label: "Silk", img: products[3].images[0] },
+            { slug: "cotton", label: "Cotton", img: allProducts[0]?.images[0] ?? "/products/p-001-a.jpg" },
+            { slug: "linen", label: "Linen", img: allProducts[2]?.images[0] ?? "/products/p-003-a.jpg" },
+            { slug: "wool", label: "Wool", img: allProducts[1]?.images[0] ?? "/products/p-002-a.jpg" },
+            { slug: "silk", label: "Silk", img: allProducts[3]?.images[0] ?? "/products/p-004-a.jpg" },
           ].map((c) => (
             <Link
               key={c.slug}
@@ -171,10 +174,9 @@ export default function HomePage() {
             </p>
           </div>
           <div>
-            <p className="eyebrow">Bespoke Stitching</p>
+            <p className="eyebrow">Heritage Quality</p>
             <p className="mt-3 text-muted">
-              Add a measurement profile at checkout and receive a finished
-              garment, tailored to your spec.
+              Sourced directly from historical craft regions, curated to ensure the finest weaves.
             </p>
           </div>
         </div>

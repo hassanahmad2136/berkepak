@@ -8,7 +8,7 @@ import {
   type SaleUnit,
   type Stitching,
 } from "./types";
-import { getProductById } from "./products";
+import { getProductById, getProductBySlug } from "./products";
 
 interface CartState {
   lines: CartLine[];
@@ -18,6 +18,7 @@ interface CartState {
   toggle: () => void;
   add: (
     productId: string,
+    productSlug: string | undefined,
     unit: SaleUnit,
     quantity?: number,
     stitching?: Stitching,
@@ -43,7 +44,7 @@ export const useCart = create<CartState>()(
       open: () => set({ isOpen: true }),
       close: () => set({ isOpen: false }),
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
-      add: (productId, unit, quantity = 1, stitching = "none") =>
+      add: (productId, productSlug, unit, quantity = 1, stitching = "none") =>
         set((s) => {
           const key = lineKey(productId, unit, stitching);
           const existing = s.lines.find(
@@ -58,7 +59,7 @@ export const useCart = create<CartState>()(
             };
           }
           return {
-            lines: [...s.lines, { productId, unit, quantity, stitching }],
+            lines: [...s.lines, { productId, productSlug, unit, quantity, stitching }],
             isOpen: true,
           };
         }),
@@ -95,7 +96,7 @@ export const useCart = create<CartState>()(
 );
 
 export function lineSubtotal(line: CartLine): number {
-  const product = getProductById(line.productId);
+  const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
   if (!product) return 0;
   const unitPrice =
     line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;

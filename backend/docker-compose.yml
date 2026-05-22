@@ -33,7 +33,31 @@ services:
       SECRET_KEY: "dev-secret-key-change-me"
       RSA_PRIVATE_KEY: |
         -----BEGIN RSA PRIVATE KEY-----
-        MIIEowIBAAKCAQEAwxxx-replace-with-your-own-key-xxxx
+        MIIEpAIBAAKCAQEAoUL7P/BaCOGbTYgufUXIsjlpPWCTJNbhfhLwHLea55gnYgHi
+        YxwOo4UdFjV+mXgo5IKFh08Mi4C2Oyaty5qlkCwr/mAkrpu3Z/RlQdJZ/FoFHxXC
+        Tg/T6nfexnDMrZd/nhc4RMJRZN6wfMVgreaO+Bvctcx/Wk1VGmSDfZ8QkK15NE1L
+        cAAsK7sn8gPybv+A7qrFAbYwlH7WmM1o8ytJ8IwlKQKDVlx38ps7pjmTfvL/26lK
+        YXxohGhoXeNEQ/3sRdo5eaBYZy11ICqoPtYjsUHxtkOCkZwkfvIrZA/QPAGpkwSJ
+        8r1atAD9wxjMOfx97nLI/ntHda8USy35VY8BzQIDAQABAoIBACu2gW7akz1XEocY
+        xClXEkklgN6PYDObP/Kx5X6TUp02xG4vvpNJFrrCqZjMlW26gbM3okSEbA0grcUo
+        /fF0ES8cmixRGYBvW28Fc7E8+QGL0VmUx1/rsHEdXzkBeKoRqBlNiAYzembSaprX
+        0hYxqk2dF937+gWbctc9qdsSlCXzQfXFOGLja+jnD0o/Mz4DJCnV2N4b8jTTyc0W
+        hxEyy1WnNIfVphoIOI9Q+V2Mqws2ZX4zE47XqmqGNMVfSBudW3EhM+eh1eswwwOU
+        WEwJjOVkVCrEyUvfImuPJ5IEEvT6IhEnVHPzxpOZXQX2UnToS/MUSvp5vKD0SCUm
+        4HsWHS0CgYEA0QzGLkG27DRiMS/JQwavBznIaR30UhsCpYla2L3tPH/w3ll6tnLG
+        0Of+g3ZJOLAFzKkeMtgy72tD/wlX3nF9caqSc0syA0eR29KMVVg5cQ9t2M9fAAJa
+        aaXyk6Xf0b0hApqo3eM3UAgE2A5nTUwWg5w44u+RliqUdq58YxPvjucCgYEAxXqk
+        5d9ORIAz/6GNzA1ddOTTy1q7XYxgjtSP4tr2p+mWj9AeY7Zf6GJ6lf+TxicckjJC
+        5khoib1Lyms9dakm3+AjX4KMSKEamCjsrLq/ybfm5Q1TYeG/9dzLYdTRHeFxbrU+
+        S4k3PPzFMQ53AzaLZXigU5+gMr7+TEJl6LaC1ysCgYEAvlnuXxJRWPU97+G+VnzQ
+        hTjVRvoSjWyw1UCj6zXNvkgVcLFzboxGgtSsSNI9TBPjw/6+U7fPcXhvutusGg2n
+        FwglQDxZNulFZC9svw2NiGhvMnto2p5J62dC4bSpf9bCJxfi6eBKbmJO3tkGsTi2
+        S3LFzcYs/9qXwxWQh7sQaEMCgYBvwJLWXwMsspw6elMC+UE86E2Ok57aNplh2po+
+        V4kjxoVkhvLbnJYzrJ8QiVw302RQu06ugKVf5RahywQxtHKCWJXL89WtODYTi307
+        1ka4QXDRiDP6fUUjPjp993ALh8uoSbqiBlmTErwIodXppJFH7/ZSvE9syDaiMyT2
+        h2oNlwKBgQDL3M6R8JJLOYq9CcAEKQs+331wLrCBHLpME7DyknDNONfUCCIV5SAS
+        UH4CrCTAjxd03mPNLGI2qfa8bOO0nw02QTcmhBL1x06gIQq9IhoPjElmRYaNwL1s
+        8DsLmdAd22xTEWIAYsWMJ2ZYi1FbwwT4+EDilTLUZNjPhKgpYODJgw==
         -----END RSA PRIVATE KEY-----
 
   dashboard:

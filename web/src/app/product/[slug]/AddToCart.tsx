@@ -12,15 +12,12 @@ import { formatPKR } from "@/lib/format";
 
 export function AddToCart({ product }: { product: Product }) {
   const [unit, setUnit] = useState<SaleUnit>("meter");
-  const [stitching, setStitching] = useState<Stitching>("none");
   const [quantity, setQuantity] = useState(1);
   const add = useCart((s) => s.add);
 
   const unitPrice =
     unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
-  const stitchingAddon =
-    stitching === "bespoke" && unit === "suit" ? BESPOKE_STITCHING_ADDON_PKR : 0;
-  const total = (unitPrice + stitchingAddon) * quantity;
+  const total = unitPrice * quantity;
 
   return (
     <div className="mt-8 space-y-5">
@@ -32,7 +29,6 @@ export function AddToCart({ product }: { product: Product }) {
               key={u}
               onClick={() => {
                 setUnit(u);
-                if (u === "meter") setStitching("none");
               }}
               className={`h-12 border text-sm capitalize transition-colors ${
                 unit === u
@@ -49,35 +45,10 @@ export function AddToCart({ product }: { product: Product }) {
         </div>
       </div>
 
-      {unit === "suit" && (
-        <div>
-          <p className="eyebrow text-muted mb-2">Stitching</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(["none", "bespoke"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStitching(s)}
-                className={`h-12 border text-sm transition-colors ${
-                  stitching === s
-                    ? "border-ink bg-ink text-paper"
-                    : "border-stone hover:border-ink"
-                }`}
-              >
-                <span className="block text-xs eyebrow">
-                  {s === "none" ? "Unstitched" : "Bespoke"}
-                </span>
-                <span className="mt-0.5 block text-xs text-current/80">
-                  {s === "none" ? "—" : `+${formatPKR(BESPOKE_STITCHING_ADDON_PKR)}`}
-                </span>
-              </button>
-            ))}
-          </div>
-          {stitching === "bespoke" && (
-            <p className="mt-2 text-xs text-muted">
-              We'll use the measurements saved in your account profile. Save them
-              first under Account → Profile.
-            </p>
-          )}
+      {unit === "meter" && (
+        <div className="bg-mist p-3 border border-stone/30 text-xs text-muted leading-relaxed space-y-1">
+          <p className="font-semibold text-ink">💡 Shopping by the Meter?</p>
+          <p>A complete standard men's suit/garment typically requires a cut of <strong>{product.metersPerSuit} meters</strong>.</p>
         </div>
       )}
 
@@ -105,7 +76,7 @@ export function AddToCart({ product }: { product: Product }) {
       </div>
 
       <button
-        onClick={() => add(product.id, unit, quantity, stitching)}
+        onClick={() => add(product.id, product.slug, unit, quantity, "none")}
         className="btn btn-primary w-full"
         disabled={!product.available}
       >

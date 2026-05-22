@@ -25,10 +25,13 @@ export interface Product {
   isNew?: boolean;
   isFeatured?: boolean;
   available: boolean;
+  meterVariantId?: string;
+  suitVariantId?: string;
 }
 
 export interface CartLine {
   productId: string;
+  productSlug?: string;
   unit: SaleUnit;
   quantity: number;
   stitching: Stitching;
