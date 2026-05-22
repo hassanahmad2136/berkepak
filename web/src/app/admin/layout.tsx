@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminEmail, isCurrentUserAdmin } from "@/lib/admin";
 import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { AdminHeader } from "./AdminHeader";
 
 const NAV = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/receipts", label: "Receipts" },
   { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/pricing", label: "Pricing" },
 ];
 
 export default async function AdminLayout({
@@ -17,17 +19,18 @@ export default async function AdminLayout({
 }) {
   if (!isSupabaseConfigured()) return <SetupNotice feature="Admin" />;
 
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) redirect("/login?next=/admin");
-  if (!isAdminEmail(data.user.email)) {
+  const isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) {
+    const supabase = await createSupabaseServer();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) redirect("/login?next=/admin");
+
     return (
       <div className="mx-auto max-w-2xl px-4 sm:px-8 py-24 text-center">
         <p className="eyebrow text-muted">Admin</p>
         <h1 className="display mt-3 text-3xl">Not authorized.</h1>
         <p className="mt-3 text-sm text-muted">
-          Add your email to the <code className="bg-mist px-1">ADMIN_EMAILS</code>{" "}
-          env var (comma-separated) and restart the dev server.
+          Access is restricted to authorized store administrators. Please contact your systems manager or sign in with an administrator account.
         </p>
       </div>
     );
@@ -35,12 +38,7 @@ export default async function AdminLayout({
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-12">
-      <p className="eyebrow text-muted">Admin</p>
-      <h1 className="display mt-2 text-4xl">Receipt Approval Hub</h1>
-      <p className="mt-2 text-sm text-muted max-w-xl">
-        Review bank-transfer receipts uploaded by customers. Approving releases
-        the order to fulfillment.
-      </p>
+      <AdminHeader />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[220px_1fr]">
         <aside className="lg:sticky lg:top-28 lg:self-start">

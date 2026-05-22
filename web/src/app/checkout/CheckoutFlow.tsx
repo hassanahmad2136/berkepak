@@ -22,7 +22,13 @@ type Defaults = {
   postalCode: string;
 };
 
-export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
+export function CheckoutFlow({
+  defaults,
+  userEmail,
+}: {
+  defaults: Defaults;
+  userEmail: string;
+}) {
   const { lines, clear } = useCart();
   const [step, setStep] = useState<Step>(1);
   const [address, setAddress] = useState<Address>({
@@ -36,8 +42,8 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
     country: "Pakistan",
   });
   const [payment, setPayment] = useState<PaymentMethod>("cod");
+  const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("whatsapp");
   const [otpSent, setOtpSent] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpVerified, setOtpVerified] = useState(false);
@@ -49,6 +55,14 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
   const subtotal = useMemo(() => cartSubtotal(lines), [lines]);
   const shipping = subtotal === 0 ? 0 : subtotal >= 10000 ? 0 : 350;
   const total = subtotal + shipping;
+
+  const selectOtpMethod = (method: "whatsapp" | "email") => {
+    setOtpMethod(method);
+    setOtpSent(false);
+    setOtpInput("");
+    setOtpError(null);
+    setOtpVerified(false);
+  };
 
   if (placedOrderId) {
     return <Confirmation orderId={placedOrderId} method={payment} total={total} />;
@@ -79,10 +93,10 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
   const handleSendOtp = () => {
     setOtpError(null);
     startOtpTransition(async () => {
-      const res = await sendOtp(address.phone);
+      const target = otpMethod === "email" ? userEmail : address.phone;
+      const res = await sendOtp(target, otpMethod);
       if (res.ok) {
         setOtpSent(true);
-        setDevOtp(res.devCode ?? null);
       } else {
         setOtpError(res.error ?? "Failed to send code.");
       }
@@ -92,7 +106,8 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
   const handleVerifyOtp = () => {
     setOtpError(null);
     startOtpTransition(async () => {
-      const res = await verifyOtp(address.phone, otpInput);
+      const target = otpMethod === "email" ? userEmail : address.phone;
+      const res = await verifyOtp(target, otpInput);
       if (res.ok) setOtpVerified(true);
       else setOtpError(res.error ?? "Invalid code.");
     });
@@ -192,11 +207,38 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
 
                     {payment === "cod" && (
                       <div className="mt-5 border-t border-stone pt-4">
-                        <p className="eyebrow text-muted">Verify mobile</p>
-                        <p className="mt-1 text-xs text-muted">
-                          We'll send a 4-digit code to{" "}
-                          {address.phone || "your mobile"}.
+                        <p className="eyebrow text-muted">Choose Verification Method</p>
+                        <div className="mt-2 flex flex-wrap gap-4 text-xs">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="otpMethod"
+                              disabled={otpSent}
+                              checked={otpMethod === "whatsapp"}
+                              onChange={() => selectOtpMethod("whatsapp")}
+                              className="accent-ink"
+                            />
+                            <span>WhatsApp ({address.phone || "mobile"})</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="otpMethod"
+                              disabled={otpSent}
+                              checked={otpMethod === "email"}
+                              onChange={() => selectOtpMethod("email")}
+                              className="accent-ink"
+                            />
+                            <span>Email ({userEmail})</span>
+                          </label>
+                        </div>
+
+                        <p className="mt-3 text-xs text-muted">
+                          {otpMethod === "whatsapp"
+                            ? `We'll send a 4-digit code via WhatsApp to ${address.phone || "your mobile"}.`
+                            : `We'll send a 4-digit code via email to ${userEmail}.`}
                         </p>
+
                         {!otpSent ? (
                           <button
                             onClick={handleSendOtp}
@@ -206,18 +248,10 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
                             {otpPending ? "Sending…" : "Send code"}
                           </button>
                         ) : otpVerified ? (
-                          <p className="mt-4 text-sm text-accent">✓ Mobile verified</p>
+                          <p className="mt-4 text-sm text-accent">✓ Verified successfully</p>
                         ) : (
                           <div className="mt-4 space-y-3">
-                            {devOtp && (
-                              <p className="text-xs bg-mist border border-stone px-3 py-2">
-                                <span className="eyebrow text-muted">Dev mode</span>
-                                <span className="ml-2">
-                                  Code: <strong>{devOtp}</strong>
-                                </span>
-                              </p>
-                            )}
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 border-stone">
                               <input
                                 className="input flex-1"
                                 placeholder="Enter 4-digit code"
@@ -237,13 +271,26 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
                             {otpError && (
                               <p className="text-xs text-accent">{otpError}</p>
                             )}
-                            <button
-                              onClick={handleSendOtp}
-                              className="text-xs underline text-muted"
-                              disabled={otpPending}
-                            >
-                              Resend code
-                            </button>
+                            <div className="flex gap-3">
+                              <button
+                                onClick={handleSendOtp}
+                                className="text-xs underline text-muted"
+                                disabled={otpPending}
+                              >
+                                Resend code
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setOtpSent(false);
+                                  setOtpInput("");
+                                  setOtpError(null);
+                                }}
+                                className="text-xs underline text-muted"
+                                disabled={otpPending}
+                              >
+                                Change method
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

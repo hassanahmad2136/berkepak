@@ -27,7 +27,7 @@ export default async function HomePage() {
         <div className="relative z-10 mx-auto flex h-full max-w-[1440px] flex-col justify-end px-4 pb-16 sm:px-8 sm:pb-24 text-paper fade-up">
           <p className="eyebrow">Spring Edit · Volume IV</p>
           <h1 className="display mt-4 text-5xl sm:text-7xl lg:text-8xl max-w-4xl">
-            Quiet luxury,<br />by the meter.
+            Quiet luxury,<br />by the suit.
           </h1>
           <p className="mt-6 max-w-md text-sm text-paper/85">
             Editorial fabrics for the discerning — sourced from heritage mills,
