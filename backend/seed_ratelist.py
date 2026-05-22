@@ -366,25 +366,6 @@ def main():
             quantity=250, # Initial stock pool of 250 suits
         )
 
-        # Create Meter Variant
-        meter_variant = ProductVariant.objects.create(
-            product=product,
-            sku=f"{slug}-meter",
-            name="By the Meter",
-            track_inventory=True,
-        )
-        ProductVariantChannelListing.objects.create(
-            variant=meter_variant,
-            channel=channel,
-            currency="PKR",
-            price_amount=Decimal(price_meter),
-            discounted_price_amount=Decimal(price_meter),
-        )
-        Stock.objects.create(
-            warehouse=warehouse,
-            product_variant=meter_variant,
-            quantity=1000, # Initial stock pool of 1000 meters
-        )
 
     print("\nSuccessfully seeded all 27 products from the Rate List!")
 

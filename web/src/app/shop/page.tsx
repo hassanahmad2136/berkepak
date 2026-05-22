@@ -75,9 +75,9 @@ export default async function ShopPage(props: {
     filtered = filtered.filter((p) => p.weave === activeWeave);
   }
   if (sort === "price-asc") {
-    filtered.sort((a, b) => a.pricePerMeter - b.pricePerMeter);
+    filtered.sort((a, b) => a.pricePerSuit - b.pricePerSuit);
   } else if (sort === "price-desc") {
-    filtered.sort((a, b) => b.pricePerMeter - a.pricePerMeter);
+    filtered.sort((a, b) => b.pricePerSuit - a.pricePerSuit);
   } else if (sort === "new") {
     filtered.sort((a, b) => Number(!!b.isNew) - Number(!!a.isNew));
   }

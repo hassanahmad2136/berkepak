@@ -47,7 +47,7 @@ export function CartDrawer() {
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <p className="display text-2xl">Your cart is empty.</p>
               <p className="mt-2 text-sm text-muted">
-                Begin with a swatch — every piece is sold by the meter or by the suit.
+                Begin with a swatch — every piece is sold by the suit.
               </p>
               <Link href="/shop" onClick={close} className="btn btn-primary mt-8">
                 Shop Fabrics
@@ -87,7 +87,7 @@ export function CartDrawer() {
                             {product.name}
                           </Link>
                           <p className="mt-1 text-xs text-muted">
-                            {product.colorName} · By the {line.unit}
+                            {product.colorName} · By the suit
                             {line.stitching === "bespoke" && " · Bespoke stitching"}
                           </p>
                         </div>
