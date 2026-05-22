@@ -6,7 +6,10 @@ import { formatPKR } from "@/lib/format";
 export function ProductCard({ product }: { product: Product }) {
   return (
     <Link href={`/product/${product.slug}`} className="group block">
-      <div className="relative aspect-[3/4] overflow-hidden bg-mist">
+      <div 
+        className="relative aspect-[3/4] overflow-hidden bg-mist"
+        style={{ viewTransitionName: `product-image-${product.id}` } as React.CSSProperties}
+      >
         <Image
           src={product.images[0]}
           alt={product.name}

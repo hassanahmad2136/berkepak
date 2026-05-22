@@ -63,12 +63,14 @@ export default async function ProductPage(props: {
               className={`relative aspect-[3/4] bg-mist overflow-hidden ${
                 i === 0 ? "sm:col-span-2 sm:aspect-[4/5]" : ""
               }`}
+              style={i === 0 ? ({ viewTransitionName: `product-image-${product.id}` } as React.CSSProperties) : undefined}
             >
               <Image
                 src={src}
                 alt={product.name}
                 fill
                 priority={i === 0}
+                fetchPriority={i === 0 ? "high" : "low"}
                 sizes="(min-width: 1024px) 60vw, 100vw"
                 className="object-cover"
               />

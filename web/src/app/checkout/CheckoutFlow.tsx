@@ -147,14 +147,14 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
             <section className="space-y-4">
               <h2 className="display text-2xl">Shipping address</h2>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className="input sm:col-span-2" placeholder="Full name" value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} />
-                <input className="input sm:col-span-2" placeholder="Mobile number (e.g. 03001234567)" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} />
-                <input className="input sm:col-span-2" placeholder="Address line 1" value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} />
-                <input className="input sm:col-span-2" placeholder="Address line 2 (optional)" value={address.line2 ?? ""} onChange={(e) => setAddress({ ...address, line2: e.target.value })} />
-                <input className="input" placeholder="City" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
-                <input className="input" placeholder="Province" value={address.province} onChange={(e) => setAddress({ ...address, province: e.target.value })} />
-                <input className="input" placeholder="Postal code" value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} />
-                <input className="input" value="Pakistan" disabled />
+                <input required autoComplete="name" className="input sm:col-span-2" placeholder="Full name" value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} />
+                <input required type="tel" autoComplete="tel" className="input sm:col-span-2" placeholder="Mobile number (e.g. 03001234567)" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} />
+                <input required autoComplete="address-line1" className="input sm:col-span-2" placeholder="Address line 1" value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} />
+                <input autoComplete="address-line2" className="input sm:col-span-2" placeholder="Address line 2 (optional)" value={address.line2 ?? ""} onChange={(e) => setAddress({ ...address, line2: e.target.value })} />
+                <input required autoComplete="address-level2" className="input" placeholder="City" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+                <input required autoComplete="address-level1" className="input" placeholder="Province" value={address.province} onChange={(e) => setAddress({ ...address, province: e.target.value })} />
+                <input required autoComplete="postal-code" className="input" placeholder="Postal code" value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} />
+                <input autoComplete="country-name" className="input" value="Pakistan" disabled />
               </div>
               <button
                 disabled={!canProceedToPayment}

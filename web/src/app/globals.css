@@ -22,7 +22,15 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  scrollbar-color: var(--color-ink) var(--color-mist);
+  scrollbar-width: thin;
 }
+
+@view-transition {
+  navigation: auto;
+}
+
+
 
 ::selection {
   background: var(--color-ink);
