@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getProductByIdAsync, getProductBySlug } from "@/lib/products";
 import { saleorFetch, isSaleorConfigured, SaleorError } from "@/lib/saleor/client";
 import {
@@ -104,6 +105,11 @@ interface SaleorCheckoutCompleteResponse {
 // ---------------------------------------------------------------------------
 
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+  const rateLimit = await checkRateLimit("checkout_place", 5);
+  if (!rateLimit.success) {
+    return { ok: false, error: rateLimit.error ?? "Too many requests." };
+  }
+
   const supabase = await createSupabaseServer();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Please sign in to place an order." };

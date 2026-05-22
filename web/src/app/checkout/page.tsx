@@ -47,6 +47,7 @@ export default async function CheckoutPage() {
 
   return (
     <CheckoutFlow
+      userEmail={userData.user.email ?? ""}
       defaults={{
         fullName: defaultAddress?.full_name ?? profile?.full_name ?? "",
         phone: defaultAddress?.phone ?? profile?.phone ?? "",

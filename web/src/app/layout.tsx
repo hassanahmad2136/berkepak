@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s — Berke Pak",
   },
   description:
-    "Premium raw fabrics — cotton, linen, wool, and silk — sold by the meter or by the suit. Crafted in Pakistan, delivered worldwide.",
+    "Premium raw fabrics — cotton, linen, wool, and silk — sold exclusively by the suit. Crafted in Pakistan, delivered worldwide.",
   icons: {
     icon: "/logo-mark.png",
     apple: "/logo-mark.png",

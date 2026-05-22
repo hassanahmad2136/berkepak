@@ -7,11 +7,11 @@ import Link from "next/link";
 const CATEGORY_META: Record<string, { title: string; description: string }> = {
   cotton: {
     title: "Cotton Fabrics",
-    description: "Egyptian and combed cotton — poplin, voile, dobby weaves. Sold by the meter or by the suit.",
+    description: "Egyptian and combed cotton — poplin, voile, dobby weaves. Sold exclusively by the suit.",
   },
   linen: {
     title: "Linen Fabrics",
-    description: "European flax linen with a slow-broken-in drape. Mid-weight, sold by the meter or by the suit.",
+    description: "European flax linen with a slow-broken-in drape. Mid-weight, sold exclusively by the suit.",
   },
   wool: {
     title: "Wool Fabrics",
@@ -36,7 +36,7 @@ export async function generateMetadata(props: {
   return {
     title: "All Fabrics",
     description:
-      "Browse the full Berke Pak archive — cotton, linen, wool, silk and blended fabrics, sold by the meter or by the suit.",
+      "Browse the full Berke Pak archive — cotton, linen, wool, silk and blended fabrics, sold exclusively by the suit.",
   };
 }
 
@@ -98,7 +98,7 @@ export default async function ShopPage(props: {
         <p className="eyebrow text-muted">The Edit</p>
         <h1 className="display text-4xl sm:text-5xl">All Fabrics</h1>
         <p className="max-w-xl text-sm text-muted">
-          Browse our full archive — sold by the meter or by the suit. Refine
+          Browse our full archive — sold exclusively by the suit. Refine
           by composition, weave, and price.
         </p>
       </div>
