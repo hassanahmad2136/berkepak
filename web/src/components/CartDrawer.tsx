@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getProductById } from "@/lib/products";
+import { getProductById, getProductBySlug } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
 import { useEffect } from "react";
 
@@ -56,7 +56,7 @@ export function CartDrawer() {
           ) : (
             <ul>
               {lines.map((line) => {
-                const product = getProductById(line.productId);
+                const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
                 if (!product) return null;
                 return (
                   <li

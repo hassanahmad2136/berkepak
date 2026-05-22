@@ -31,6 +31,7 @@ export interface Product {
 
 export interface CartLine {
   productId: string;
+  productSlug?: string;
   unit: SaleUnit;
   quantity: number;
   stitching: Stitching;

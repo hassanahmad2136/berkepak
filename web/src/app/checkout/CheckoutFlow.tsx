@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getProductById } from "@/lib/products";
+import { getProductById, getProductBySlug } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
 import type { Address, PaymentMethod } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
@@ -351,7 +351,7 @@ export function CheckoutFlow({ defaults }: { defaults: Defaults }) {
           <p className="eyebrow text-muted">Order summary</p>
           <ul className="mt-4 divide-y divide-stone">
             {lines.map((line) => {
-              const product = getProductById(line.productId);
+              const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
               if (!product) return null;
               return (
                 <li

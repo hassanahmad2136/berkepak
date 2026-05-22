@@ -45,6 +45,13 @@ export function AddToCart({ product }: { product: Product }) {
         </div>
       </div>
 
+      {unit === "meter" && (
+        <div className="bg-mist p-3 border border-stone/30 text-xs text-muted leading-relaxed space-y-1">
+          <p className="font-semibold text-ink">💡 Shopping by the Meter?</p>
+          <p>A complete standard men's suit/garment typically requires a cut of <strong>{product.metersPerSuit} meters</strong>.</p>
+        </div>
+      )}
+
       <div>
         <p className="eyebrow text-muted mb-2">
           Quantity {unit === "meter" ? "(meters)" : "(suits)"}
@@ -69,7 +76,7 @@ export function AddToCart({ product }: { product: Product }) {
       </div>
 
       <button
-        onClick={() => add(product.id, unit, quantity, "none")}
+        onClick={() => add(product.id, product.slug, unit, quantity, "none")}
         className="btn btn-primary w-full"
         disabled={!product.available}
       >
