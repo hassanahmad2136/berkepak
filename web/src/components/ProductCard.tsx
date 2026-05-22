@@ -42,7 +42,9 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="shrink-0 text-right">
           <p className="font-semibold text-ink">{formatPKR(product.pricePerSuit)}</p>
           <p className="mt-0.5 text-xs text-muted font-medium">/ suit</p>
-          <p className="mt-1 text-[11px] text-muted">or {formatPKR(product.pricePerMeter)}/m</p>
+          <p className="mt-1.5 inline-block rounded border border-stone/30 bg-stone/5 px-1.5 py-0.5 text-[10px] text-muted">
+            {product.metersPerSuit}m included
+          </p>
         </div>
       </div>
     </Link>
