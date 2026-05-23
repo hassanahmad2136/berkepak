@@ -49,14 +49,17 @@ export async function saleorFetch<T = unknown>(
   const timeoutId = setTimeout(() => controller.abort(), options.timeout ?? 2500);
 
   try {
+    // `cache: "no-store"` and `next.revalidate` are mutually exclusive in Next.js.
+    // Only apply revalidate when no explicit cache directive is set (i.e. for reads).
+    const nextOptions = options.cache
+      ? { tags: options.tags }
+      : { revalidate: options.revalidate ?? 60, tags: options.tags };
+
     const res = await fetch(SALEOR_API_URL, {
       method: "POST",
       headers,
       body: JSON.stringify({ query, variables }),
-      next: {
-        revalidate: options.revalidate ?? 60, // ISR: refetch every 60 s
-        tags: options.tags,
-      },
+      next: nextOptions,
       cache: options.cache,
       signal: controller.signal,
     });

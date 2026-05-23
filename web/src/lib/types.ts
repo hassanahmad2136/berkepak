@@ -35,6 +35,7 @@ export interface CartLine {
   unit: SaleUnit;
   quantity: number;
   stitching: Stitching;
+  color: string;
 }
 
 export interface Address {

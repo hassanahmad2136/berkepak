@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getProductByIdAsync, getProductBySlug } from "@/lib/products";
 import { saleorFetch, isSaleorConfigured, SaleorError } from "@/lib/saleor/client";
@@ -141,6 +141,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
     const variantId = product.suitVariantId;
+    const color = line.color || "White";
 
     return {
       product_id: product.id,
@@ -152,6 +153,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching: line.stitching,
       stitching_addon: stitchingAddon,
       line_total: lineTotal,
+      color,
       variantId,
     };
   }));
@@ -292,9 +294,53 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching: it.stitching,
       stitching_addon: it.stitching_addon,
       line_total: it.line_total,
+      color: it.color,
     })));
   if (itemsErr) return { ok: false, error: itemsErr.message };
 
+  // -----------------------------------------------------------------------
+  // Step C: Validate stock & atomically decrement inventory by color
+  // Uses admin client since product_colors only allows public SELECT via RLS.
+  // -----------------------------------------------------------------------
+  const adminClient = createSupabaseAdmin();
+
+  // Validate stock for all lines before decrementing anything
+  for (const it of items) {
+    const { data: colorRow, error: stockFetchErr } = await adminClient
+      .from("product_colors")
+      .select("stock")
+      .eq("product_id", it.product_id)
+      .eq("color_name", it.color)
+      .maybeSingle();
+
+    if (stockFetchErr) {
+      // Non-fatal: log and continue if color row missing (graceful fallback)
+      console.warn(`Stock check failed for ${it.product_name} (${it.color}):`, stockFetchErr.message);
+      continue;
+    }
+
+    if (colorRow && colorRow.stock < it.quantity) {
+      return {
+        ok: false,
+        error: `"${it.product_name}" (${it.color}) only has ${colorRow.stock} unit${colorRow.stock === 1 ? "" : "s"} left in stock. Please reduce your quantity.`,
+      };
+    }
+  }
+
+  // Atomically decrement stock for each line
+  for (const it of items) {
+    const { error: decErr } = await adminClient.rpc("decrement_product_stock", {
+      p_product_id: it.product_id,
+      p_color_name: it.color,
+      p_quantity: it.quantity,
+    });
+    if (decErr) {
+      // Log but don't block order — stock can be corrected in admin panel
+      console.error(`Failed to decrement stock for ${it.product_name} (${it.color}):`, decErr.message);
+    }
+  }
+
   revalidatePath("/account/orders");
+  revalidatePath("/admin/stock");
   return { ok: true, orderId };
 }

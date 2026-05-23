@@ -58,9 +58,10 @@ export function CartDrawer() {
               {lines.map((line) => {
                 const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
                 if (!product) return null;
+                const activeColor = line.color || "White";
                 return (
                   <li
-                    key={`${line.productId}-${line.unit}-${line.stitching}`}
+                    key={`${line.productId}-${line.unit}-${line.stitching}-${activeColor}`}
                     className="flex gap-4 border-b border-stone px-6 py-5"
                   >
                     <Link
@@ -82,14 +83,24 @@ export function CartDrawer() {
                           <Link
                             href={`/product/${product.slug}`}
                             onClick={close}
-                            className="text-sm"
+                            className="text-sm font-medium"
                           >
                             {product.name}
                           </Link>
-                          <p className="mt-1 text-xs text-muted">
-                            {product.colorName} · By the suit
-                            {line.stitching === "bespoke" && " · Bespoke stitching"}
-                          </p>
+                          <div className="mt-1 text-xs text-muted flex items-center gap-1.5">
+                            <span className="inline-block w-2.5 h-2.5 rounded-full border border-stone/50" style={{
+                              backgroundColor: activeColor.toLowerCase() === "white" ? "#ffffff" : 
+                                               activeColor.toLowerCase() === "black" ? "#000000" :
+                                               activeColor.toLowerCase() === "blue" ? "#0000ff" : 
+                                               activeColor.toLowerCase() === "red" ? "#ff0000" :
+                                               activeColor.toLowerCase() === "green" ? "#008000" :
+                                               activeColor.toLowerCase() === "beige" ? "#f5f5dc" :
+                                               activeColor.toLowerCase() === "gray" || activeColor.toLowerCase() === "grey" ? "#808080" : 
+                                               "#dddddd"
+                            }} />
+                            <span>{activeColor} · By the suit</span>
+                            {line.stitching === "bespoke" && " · Bespoke"}
+                          </div>
                         </div>
                         <p className="text-sm">{formatPKR(lineSubtotal(line))}</p>
                       </div>
@@ -97,27 +108,27 @@ export function CartDrawer() {
                         <div className="flex items-center border border-stone">
                           <button
                             aria-label="Decrease"
-                            className="h-8 w-8 text-sm"
+                            className="h-8 w-8 text-sm cursor-pointer"
                             onClick={() =>
-                              setQuantity(line.productId, line.unit, line.stitching, line.quantity - 1)
+                              setQuantity(line.productId, line.unit, line.stitching, activeColor, line.quantity - 1)
                             }
                           >
                             −
                           </button>
-                          <span className="px-3 text-sm tabular-nums">{line.quantity}</span>
+                          <span className="px-3 text-sm tabular-nums select-none">{line.quantity}</span>
                           <button
                             aria-label="Increase"
-                            className="h-8 w-8 text-sm"
+                            className="h-8 w-8 text-sm cursor-pointer"
                             onClick={() =>
-                              setQuantity(line.productId, line.unit, line.stitching, line.quantity + 1)
+                              setQuantity(line.productId, line.unit, line.stitching, activeColor, line.quantity + 1)
                             }
                           >
                             +
                           </button>
                         </div>
                         <button
-                          onClick={() => remove(line.productId, line.unit, line.stitching)}
-                          className="text-xs text-muted underline"
+                          onClick={() => remove(line.productId, line.unit, line.stitching, activeColor)}
+                          className="text-xs text-muted underline cursor-pointer"
                         >
                           Remove
                         </button>
