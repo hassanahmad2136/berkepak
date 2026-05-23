@@ -19,6 +19,10 @@ const HEADER_MAP: Record<string, { title: string; desc: string }> = {
     title: "Pricing Management Hub",
     desc: "Configure raw suit prices, apply percentage discounts, or adjust prices in bulk across both Saleor & Supabase.",
   },
+  "/admin/stock": {
+    title: "Stock & Inventory Control",
+    desc: "Track and adjust fabric stock levels dynamically by color. Monitor low quantities and manage stock reserves.",
+  },
 };
 
 export function AdminHeader() {

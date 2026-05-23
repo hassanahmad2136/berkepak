@@ -9,7 +9,6 @@
 ~~Partner mill 4~~
 ~~Partner mill 5~~
 ~~Partner mill 6~~
-
 3. the current theme layout and style are good for the style but need to fix things wrt whatwe are selling
 
 keep this site as a refrence https://www.greenflagfabrics.com/
@@ -27,7 +26,7 @@ to keep in mind what we add for mens fabric while selling
 
 6. WA enablemnt and code sent ~~also email~~
 7. WA Chatbot (api seems to be running just add the bot features)
-8. EMAIL NOTIFICAITONS (SENDGRID)
+8. EMAIL NOTIFICAITONS
 
 ### **Bug fixes:**
 
@@ -38,12 +37,12 @@ to keep in mind what we add for mens fabric while selling
 5. Forgot password add
 6. change. in google auth You're signing back in to qlluilxjenwctwahignx.supabase.co
 7. apple auth remove or add
-
+8. ~~admin panel button for admin accs~~
 
 ### **Later:**
 
-- COLOR FOR SUITES ADD
-- admin any change sends a email to admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com (sendgrid)
+- ~~COLOR FOR SUITES ADD~~
+- ~~admin any change sends a email to admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com~~
 1. SMS
 2. Payemet gateway
 3. Overall rate limiting, auth and authorizations
@@ -57,6 +56,11 @@ to keep in mind what we add for mens fabric while selling
     The frontend requires some changes to provide the CAPTCHA on-screen for the user. Turnstile can be used with any JavaScript framework but we'll use React and the Turnstile React component for this example.
 
 8. FB auth?
+9. Summer winter segregation?
+10. discount percentage and display on products
+11. review section
 
 ### **Ideas?**:
+
+1. inven manager (mongo) + this site (PG+ Saleour)
 

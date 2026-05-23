@@ -96,7 +96,7 @@ PRODUCTS_DATA = [
   },
   {
     "slug": "monsoon-plus",
-    "name": "Moonsoon Plus",
+    "name": "Monsoon Plus",
     "category": "blended",
     "composition": "65% Poly / 35% Viscose Heavy Blend",
     "pricePerSuit": 13990,
@@ -105,7 +105,7 @@ PRODUCTS_DATA = [
   },
   {
     "slug": "monsoon",
-    "name": "Moonsoon",
+    "name": "Monsoon",
     "category": "blended",
     "composition": "60% Poly / 40% Viscose Summer Weight",
     "pricePerSuit": 7690,
@@ -114,7 +114,7 @@ PRODUCTS_DATA = [
   },
   {
     "slug": "topaz",
-    "name": "TOPAZ",
+    "name": "Topaz",
     "category": "blended",
     "composition": "Premium Jewel Microfiber",
     "pricePerSuit": 7490,
@@ -123,7 +123,7 @@ PRODUCTS_DATA = [
   },
   {
     "slug": "zircon",
-    "name": "ZIRCON",
+    "name": "Zircon",
     "category": "blended",
     "composition": "Standard Resilient Microfiber Blend",
     "pricePerSuit": 6390,
@@ -158,8 +158,8 @@ PRODUCTS_DATA = [
     "description": "Part of our exquisite Opal series. Features a subtle, organic luster that looks exceptionally refined under evening lights."
   },
   {
-    "slug": "hony-opal",
-    "name": "Hony Opal",
+    "slug": "honey-opal",
+    "name": "Honey Opal",
     "category": "blended",
     "composition": "Soft-Touch Poly-Viscose",
     "pricePerSuit": 5690,
@@ -212,8 +212,8 @@ PRODUCTS_DATA = [
     "description": "An advanced micro-fiber wash & wear featuring chemical-free cool-touch technology. Provides maximum relief during high summer peaks."
   },
   {
-    "slug": "lava-rock-bohski",
-    "name": "LAVA ROCK BOHSKI",
+    "slug": "lava-rock-boski",
+    "name": "Lava Rock Boski",
     "category": "silk",
     "composition": "Premium Silk-Alternative Micro-Viscose",
     "pricePerSuit": 5490,
@@ -221,8 +221,8 @@ PRODUCTS_DATA = [
     "description": "Crafted specifically to match the rich off-white luster, heavy liquid drape, and soft cool touch of premium traditional Chinese silk Boski."
   },
   {
-    "slug": "marget",
-    "name": "Marget",
+    "slug": "market",
+    "name": "Market",
     "category": "blended",
     "composition": "Classic Corporate Poly-Viscose",
     "pricePerSuit": 6690,
@@ -257,8 +257,8 @@ PRODUCTS_DATA = [
     "description": "Features a beautiful self-pattern jacquard weave. Light and airy, making it highly suitable for upscale semi-formal summer gatherings."
   },
   {
-    "slug": "inovative",
-    "name": "Inovative",
+    "slug": "innovative",
+    "name": "Innovative",
     "category": "blended",
     "composition": "Four-way Stretch Microfiber",
     "pricePerSuit": 4990,
@@ -266,8 +266,8 @@ PRODUCTS_DATA = [
     "description": "A highly innovative, flexible microfiber blend offering modern comfort and slight stretch. Crease-resistant and exceptionally cool."
   },
   {
-    "slug": "frasco",
-    "name": "Frasco",
+    "slug": "fresco",
+    "name": "Fresco",
     "category": "blended",
     "composition": "Structured Everyday Poly-Viscose",
     "pricePerSuit": 5490,
@@ -289,6 +289,9 @@ def main():
     if not warehouse:
         print("Error: No warehouses found in database!")
         return
+
+    # Delete legacy 'frasco' to prevent duplicate items after renaming
+    Product.objects.filter(slug="frasco").delete()
 
     # 2. Get or create Product Type
     product_type, _ = ProductType.objects.get_or_create(

@@ -4,7 +4,7 @@ import { NewsletterForm } from "./NewsletterForm";
 
 export function Footer() {
   return (
-    <footer className="border-t border-stone mt-24">
+    <footer className="border-t border-stone mt-8">
       <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-16 grid gap-12 md:grid-cols-4">
         <div className="md:col-span-2">
           <Image
