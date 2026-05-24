@@ -18,6 +18,10 @@ export async function uploadReceipt(formData: FormData): Promise<UploadReceiptRe
   if (file.size > 10 * 1024 * 1024) {
     return { ok: false, error: "File must be under 10 MB." };
   }
+  const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
+  if (!ALLOWED_MIME.includes(file.type)) {
+    return { ok: false, error: "Only JPEG, PNG, WebP, HEIC, or PDF files are accepted." };
+  }
 
   const supabase = await createSupabaseServer();
   const { data: userData } = await supabase.auth.getUser();
@@ -39,7 +43,10 @@ export async function uploadReceipt(formData: FormData): Promise<UploadReceiptRe
   const path = `${userData.user.id}/${orderId}-${Date.now()}.${ext}`;
   const { error: uploadErr } = await supabase.storage
     .from("receipts")
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, file, {
+      contentType: ALLOWED_MIME.includes(file.type) ? file.type : "application/octet-stream",
+      upsert: false,
+    });
   if (uploadErr) return { ok: false, error: uploadErr.message };
 
   const { error: rowErr } = await supabase.from("receipts").insert({
