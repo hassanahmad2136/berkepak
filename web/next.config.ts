@@ -17,9 +17,12 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
+      // unsafe-inline + unsafe-eval required by Next.js 16 for hydration and module evaluation.
+      // To harden further: migrate to nonce-based CSP via middleware (generates per-request nonce).
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "img-src 'self' data: blob: https://images.unsplash.com https://plus.unsplash.com https://*.supabase.co",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      // unsafe-inline required for Tailwind CSS and Next.js inline critical styles.
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "frame-ancestors 'none'",
@@ -34,6 +37,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "plus.unsplash.com" },
+      { protocol: "https", hostname: "*.supabase.co" },
     ],
   },
   async headers() {
