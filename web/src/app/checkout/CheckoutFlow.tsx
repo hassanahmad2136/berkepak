@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getProductById, getProductBySlug } from "@/lib/products";
+import { getProductByIdAsync } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
+import type { Product } from "@/lib/types";
 import type { Address, PaymentMethod } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
 import { placeOrder } from "@/lib/actions/orders";
@@ -31,6 +32,7 @@ export function CheckoutFlow({
   userEmail: string;
 }) {
   const { lines, clear } = useCart();
+  const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
   const [step, setStep] = useState<Step>(1);
   const [address, setAddress] = useState<Address>({
     fullName: defaults.fullName,
@@ -53,7 +55,19 @@ export function CheckoutFlow({
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
-  const subtotal = useMemo(() => cartSubtotal(lines), [lines]);
+  useEffect(() => {
+    if (lines.length === 0) return;
+    const ids = [...new Set(lines.map((l) => l.productId))];
+    Promise.all(ids.map((id) => getProductByIdAsync(id))).then((results) => {
+      setProductMap((prev) => {
+        const next = new Map(prev);
+        results.forEach((p, i) => { if (p) next.set(ids[i], p); });
+        return next;
+      });
+    });
+  }, [lines]);
+
+  const subtotal = useMemo(() => cartSubtotal(lines, productMap), [lines, productMap]);
   const shipping = subtotal === 0 ? 0 : subtotal >= 10000 ? 0 : 350;
   const total = subtotal + shipping;
 
@@ -400,7 +414,7 @@ export function CheckoutFlow({
           <p className="eyebrow text-muted">Order summary</p>
           <ul className="mt-4 divide-y divide-stone">
             {lines.map((line) => {
-              const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+              const product = productMap.get(line.productId);
               if (!product) return null;
               const activeColor = line.color || "White";
               return (
@@ -437,7 +451,7 @@ export function CheckoutFlow({
                       {line.stitching === "bespoke" && " · Bespoke"}
                     </p>
                   </div>
-                  <p className="text-sm shrink-0">{formatPKR(lineSubtotal(line))}</p>
+                  <p className="text-sm shrink-0">{formatPKR(lineSubtotal(line, product))}</p>
                 </li>
               );
             })}
