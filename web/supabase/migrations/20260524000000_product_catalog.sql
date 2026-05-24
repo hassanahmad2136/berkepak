@@ -41,7 +41,7 @@ create policy "admin_write" on public.product_catalog
 create extension if not exists moddatetime schema extensions;
 create trigger set_updated_at
   before update on public.product_catalog
-  for each row execute function moddatetime(updated_at);
+  for each row execute function extensions.moddatetime(updated_at);
 
 -- 6. Index is_active for RLS filter performance
 create index if not exists idx_product_catalog_is_active on public.product_catalog(is_active);

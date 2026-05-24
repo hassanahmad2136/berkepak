@@ -15,12 +15,8 @@ alter table public.product_colors
 alter table public.product_colors
   alter column product_id drop not null;
 
--- 4a. Make catalog_id NOT NULL
---    IMPORTANT: Only safe after porting script confirms zero orphaned records.
---    In local dev, product_colors is empty so this always succeeds.
---    In production, run the porting script first.
-alter table public.product_colors
-  alter column catalog_id set not null;
+-- 4a. NOT NULL deferred: run after porting script populates catalog_id.
+--     ALTER TABLE public.product_colors ALTER COLUMN catalog_id SET NOT NULL;
 
 -- 5. Add FK constraint: catalog_id → product_catalog.id
 alter table public.product_colors
