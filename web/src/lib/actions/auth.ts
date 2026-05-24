@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/utils/redirect";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { SignupSchema, LoginSchema } from "@/lib/validation";
 
 export type AuthState =
   | undefined
@@ -34,24 +35,17 @@ export async function signupAction(
   const rl = await checkRateLimit("auth_signup", 5, 60000);
   if (!rl.success) return { error: "Too many signup attempts. Please wait a minute." };
 
-  const fullName = String(formData.get("fullName") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const phoneRaw = String(formData.get("phone") ?? "").trim();
-  const phone = normalizePhone(phoneRaw);
-  const password = String(formData.get("password") ?? "");
-
-  if (!fullName) return { error: "Please enter your full name." };
-  if (!email) return { error: "Please enter your email." };
-  if (!phone) return { error: "Mobile number is required." };
-  if (!PK_MOBILE_RE.test(phone)) {
-    return {
-      error:
-        "Enter a valid Pakistani mobile number (e.g. 03001234567 or +923001234567).",
-    };
+  const raw = {
+    fullName: String(formData.get("fullName") ?? "").trim(),
+    email: String(formData.get("email") ?? "").trim(),
+    phone: normalizePhone(String(formData.get("phone") ?? "").trim()),
+    password: String(formData.get("password") ?? ""),
+  };
+  const parsed = SignupSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
   }
-  if (password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
-  }
+  const { fullName, email, phone, password } = parsed.data;
 
   const origin = await siteOrigin();
   const supabase = await createSupabaseServer();
@@ -83,8 +77,15 @@ export async function loginAction(
   const rl = await checkRateLimit("auth_login", 10, 60000);
   if (!rl.success) return { error: "Too many login attempts. Please wait a minute." };
 
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const password = String(formData.get("password") ?? "");
+  const raw = {
+    email: String(formData.get("email") ?? "").trim(),
+    password: String(formData.get("password") ?? ""),
+  };
+  const parsed = LoginSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: "Invalid email or password format." };
+  }
+  const { email, password } = parsed.data;
   const next = String(formData.get("next") ?? "/account");
 
   const supabase = await createSupabaseServer();

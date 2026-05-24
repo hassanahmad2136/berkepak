@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { PlaceOrderSchema } from "@/lib/validation";
 import { getProductByIdAsync } from "@/lib/products";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
@@ -37,17 +38,23 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     return { ok: false, error: rateLimit.error ?? "Too many requests." };
   }
 
+  const parsed = PlaceOrderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+  const validInput = parsed.data;
+
   const supabase = await createSupabaseServer();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Please sign in to place an order." };
 
-  if (input.lines.length === 0) return { ok: false, error: "Cart is empty." };
-  if (input.paymentMethod === "cod" && !input.otpVerified) {
+  if (validInput.lines.length === 0) return { ok: false, error: "Cart is empty." };
+  if (validInput.paymentMethod === "cod" && !validInput.otpVerified) {
     return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
   }
 
   // Recompute totals server-side so the client cannot tamper with prices.
-  const items = await Promise.all(input.lines.map(async (line) => {
+  const items = await Promise.all(validInput.lines.map(async (line) => {
     const product = await getProductByIdAsync(line.productId);
     if (!product) throw new Error(`Unknown product ${line.productId}`);
 
@@ -86,15 +93,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const { error: orderErr } = await supabase.from("orders").insert({
     id: orderId,
     user_id: userData.user.id,
-    status: input.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
-    payment_method: input.paymentMethod,
+    status: validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
+    payment_method: validInput.paymentMethod,
     payment_status:
-      input.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
+      validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
     subtotal,
     shipping,
     total,
-    shipping_address: input.address,
-    otp_verified: input.otpVerified,
+    shipping_address: validInput.address,
+    otp_verified: validInput.otpVerified,
   });
   if (orderErr) return { ok: false, error: orderErr.message };
 
