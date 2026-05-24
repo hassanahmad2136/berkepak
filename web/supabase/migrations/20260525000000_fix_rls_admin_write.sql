@@ -12,7 +12,10 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Lock down admin_users — only service role can manage it
+-- Lock down admin_users to direct client access.
+-- Supabase service_role has BYPASSRLS privilege and ignores these policies,
+-- so createSupabaseAdmin() (service_role) can still INSERT/DELETE admin users.
+-- This policy blocks anon + authenticated roles from reading or writing admin_users.
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS admin_users_service_only ON admin_users;
 CREATE POLICY admin_users_service_only ON admin_users
