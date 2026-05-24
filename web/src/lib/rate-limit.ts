@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 // Falls back to in-memory when UPSTASH_REDIS_REST_URL is not set (local dev).
 
 // ---- Upstash path ----
-type UpstashFn = (key: string, limit: number, windowMs: number) => Promise<{ success: boolean }>;
+type UpstashFn = (key: string, limit: number, windowMs: number) => Promise<{ success: boolean; error?: string }>;
 let upstashFn: UpstashFn | null = null;
 let upstashInitialized = false;
 
@@ -20,12 +20,20 @@ async function getUpstashFn(): Promise<UpstashFn | null> {
     const { Redis } = await import("@upstash/redis");
     const redis = Redis.fromEnv();
 
+    // Cache one Ratelimit instance per (limit, windowMs) config
+    const limiterCache = new Map<string, InstanceType<typeof Ratelimit>>();
+
     upstashFn = async (key: string, limit: number, windowMs: number) => {
-      const limiter = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(limit, `${windowMs}ms`),
-        prefix: "berkepak_rl",
-      });
+      const configKey = `${limit}:${windowMs}`;
+      let limiter = limiterCache.get(configKey);
+      if (!limiter) {
+        limiter = new Ratelimit({
+          redis,
+          limiter: Ratelimit.slidingWindow(limit, `${windowMs}ms`),
+          prefix: "berkepak_rl",
+        });
+        limiterCache.set(configKey, limiter);
+      }
       const result = await limiter.limit(key);
       return { success: result.success };
     };
