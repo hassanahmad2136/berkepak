@@ -43,6 +43,9 @@ create trigger set_updated_at
   before update on public.product_catalog
   for each row execute function moddatetime(updated_at);
 
--- 6. Add catalog_id UUID column to product_colors (populate later in porting script)
+-- 6. Index is_active for RLS filter performance
+create index if not exists idx_product_catalog_is_active on public.product_catalog(is_active);
+
+-- 7. Add catalog_id UUID column to product_colors (populate later in porting script)
 alter table public.product_colors
   add column if not exists catalog_id uuid;
