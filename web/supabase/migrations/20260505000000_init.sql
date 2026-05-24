@@ -157,8 +157,8 @@ create policy "otp_no_client_access" on public.otp_codes for all using (false);
 -- =====================================================================
 -- Storage bucket for receipts
 -- =====================================================================
-insert into storage.buckets (id, name, public)
-values ('receipts', 'receipts', false)
+insert into storage.buckets (id, name)
+values ('receipts', 'receipts')
 on conflict (id) do nothing;
 
 create policy "receipts_self_upload"
