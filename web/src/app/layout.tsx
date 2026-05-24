@@ -22,8 +22,9 @@ export const metadata: Metadata = {
   description:
     "Premium raw fabrics — cotton, linen, wool, and silk — sold exclusively by the suit. Crafted in Pakistan, delivered worldwide.",
   icons: {
-    icon: "/logo-mark.png",
-    apple: "/logo-mark.png",
+    icon: "/logo.png?v=1",
+    shortcut: "/logo.png?v=1",
+    apple: "/logo.png?v=1",
   },
 };
 
