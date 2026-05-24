@@ -120,14 +120,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   // -----------------------------------------------------------------------
   const adminClient = createSupabaseAdmin();
   for (const it of items) {
-    const { error: decErr } = await adminClient.rpc("decrement_product_stock", {
+    const { data: stockOk, error: decErr } = await adminClient.rpc("decrement_product_stock", {
       p_product_id: it.product_id,
       p_color_name: it.color,
       p_quantity: it.quantity,
     });
     if (decErr) {
-      console.error(`Stock decrement failed for product ${it.product_id}:`, decErr.message);
-      // Non-fatal: order is saved, stock reconciliation can be done manually
+      console.error(`Stock decrement error for product ${it.product_id}:`, decErr.message);
+    } else if (!stockOk) {
+      console.warn(`Insufficient stock for product ${it.product_id} color ${it.color} — order saved, stock not decremented`);
     }
   }
 
