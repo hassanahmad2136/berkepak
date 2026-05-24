@@ -4,11 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
 import { getProductById, getProductBySlug } from "@/lib/products";
+import { useProducts } from "@/lib/use-products";
 import { formatPKR } from "@/lib/format";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 export function CartDrawer() {
   const { isOpen, close, lines, setQuantity, remove } = useCart();
+  const products = useProducts();
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
@@ -17,7 +19,7 @@ export function CartDrawer() {
     };
   }, [isOpen]);
 
-  const subtotal = cartSubtotal(lines);
+  const subtotal = cartSubtotal(lines, products);
 
   return (
     <>
@@ -56,7 +58,7 @@ export function CartDrawer() {
           ) : (
             <ul>
               {lines.map((line) => {
-                const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+                const product = getProductById(line.productId, products) ?? (line.productSlug ? getProductBySlug(line.productSlug, products) : undefined);
                 if (!product) return null;
                 return (
                   <li
@@ -91,7 +93,7 @@ export function CartDrawer() {
                             {line.stitching === "bespoke" && " · Bespoke stitching"}
                           </p>
                         </div>
-                        <p className="text-sm">{formatPKR(lineSubtotal(line))}</p>
+                        <p className="text-sm">{formatPKR(lineSubtotal(line, products))}</p>
                       </div>
                       <div className="mt-auto flex items-center justify-between">
                         <div className="flex items-center border border-stone">

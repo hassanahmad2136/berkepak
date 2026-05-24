@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getProductByIdAsync, getProductBySlug } from "@/lib/products";
+import { getProductByIdAsync } from "@/lib/products";
 import { saleorFetch, isSaleorConfigured, SaleorError } from "@/lib/saleor/client";
 import {
   CHECKOUT_CREATE_MUTATION,
@@ -121,17 +121,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   // Recompute totals server-side so the client cannot tamper with prices.
   const items = await Promise.all(input.lines.map(async (line) => {
-    let product = await getProductByIdAsync(line.productId);
+    const product = await getProductByIdAsync(line.productId);
     if (!product) throw new Error(`Unknown product ${line.productId}`);
-
-    // If it's a static fallback product ID (starts with "p-"), try to upgrade it
-    // to the matching live Saleor product by slug so variant IDs resolve successfully.
-    if (product.id.startsWith("p-") || !product.suitVariantId) {
-      const liveProduct = getProductBySlug(product.slug);
-      if (liveProduct && !liveProduct.id.startsWith("p-")) {
-        product = liveProduct;
-      }
-    }
 
     const unitPrice = product.pricePerSuit;
     const stitchingAddon =

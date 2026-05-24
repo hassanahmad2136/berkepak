@@ -1,6 +1,6 @@
 import { ProductCard } from "@/components/ProductCard";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { getProductById } from "@/lib/products";
+import { getProductByIdAsync } from "@/lib/products";
 
 export default async function WishlistPage() {
   const supabase = await createSupabaseServer();
@@ -9,9 +9,9 @@ export default async function WishlistPage() {
     .select("product_id")
     .order("created_at", { ascending: false });
 
-  const items = (data ?? [])
-    .map((row) => getProductById(row.product_id))
-    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+  const items = (
+    await Promise.all((data ?? []).map((row) => getProductByIdAsync(row.product_id)))
+  ).filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   return (
     <div>

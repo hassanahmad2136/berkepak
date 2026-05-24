@@ -9,6 +9,7 @@ import {
   type Stitching,
 } from "./types";
 import { getProductById, getProductBySlug } from "./products";
+import type { Product } from "./types";
 
 interface CartState {
   lines: CartLine[];
@@ -95,8 +96,8 @@ export const useCart = create<CartState>()(
   ),
 );
 
-export function lineSubtotal(line: CartLine): number {
-  const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+export function lineSubtotal(line: CartLine, products: Product[]): number {
+  const product = getProductById(line.productId, products) ?? (line.productSlug ? getProductBySlug(line.productSlug, products) : undefined);
   if (!product) return 0;
   const unitPrice =
     line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
@@ -107,8 +108,8 @@ export function lineSubtotal(line: CartLine): number {
   return (unitPrice + addon) * line.quantity;
 }
 
-export function cartSubtotal(lines: CartLine[]): number {
-  return lines.reduce((sum, l) => sum + lineSubtotal(l), 0);
+export function cartSubtotal(lines: CartLine[], products: Product[]): number {
+  return lines.reduce((sum, l) => sum + lineSubtotal(l, products), 0);
 }
 
 export function cartItemCount(lines: CartLine[]): number {
