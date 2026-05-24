@@ -139,6 +139,13 @@ export async function updateSingleProductPrice(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
+  if (!Number.isFinite(newPrice) || newPrice < 100) {
+    return { ok: false, error: "Price must be at least 100 PKR." };
+  }
+  if (newPrice > 1_000_000) {
+    return { ok: false, error: "Price cannot exceed 1,000,000 PKR." };
+  }
+
   const admin = createSupabaseAdmin();
   const { error } = await admin
     .from("product_catalog")
@@ -177,7 +184,7 @@ export async function bulkUpdatePrices(
     let adjustment = type === "flat" ? amount : p.price * (amount / 100);
     let newPrice = direction === "increase" ? p.price + adjustment : p.price - adjustment;
     // Round to nearest 10 PKR, clamp to 0
-    const roundedPrice = Math.max(0, Math.round(newPrice / 10) * 10);
+    const roundedPrice = Math.min(1_000_000, Math.max(100, Math.round(newPrice / 10) * 10));
 
     const { error } = await admin
       .from("product_catalog")

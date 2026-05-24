@@ -58,7 +58,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         : 0;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
-    const color = "White"; // CartLine has no color field; default to White
+    const color = line.color || "White";
 
     return {
       product_id: product.id,
