@@ -200,7 +200,7 @@ async function updateProductColorsFK(catalogRows) {
     .select("id, product_id, catalog_id");
   if (colorErr) {
     console.error("Error fetching product_colors:", colorErr.message);
-    return;
+    process.exit(1);
   }
 
   // Fetch legacy products table: Saleor ID → slug
@@ -322,9 +322,14 @@ async function main() {
   );
 
   // Fetch catalog for FK update
-  const { data: catalogRows } = await supabase
+  const { data: catalogRows, error: catalogFetchErr } = await supabase
     .from("product_catalog")
     .select("id, slug");
+
+  if (catalogFetchErr) {
+    console.error("Error fetching product_catalog for FK update:", catalogFetchErr.message);
+    process.exit(1);
+  }
 
   await updateProductColorsFK(catalogRows);
 
