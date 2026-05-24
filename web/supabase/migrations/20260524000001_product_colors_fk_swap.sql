@@ -65,7 +65,10 @@ begin
 end;
 $$;
 
--- 9. Re-attach trigger to product_catalog (auto-seed colors on new product insert)
+-- 9. Drop legacy TEXT overload of decrement_product_stock to avoid Postgres ambiguity
+drop function if exists public.decrement_product_stock(text, text, integer);
+
+-- 10. Re-attach trigger to product_catalog (auto-seed colors on new product insert)
 drop trigger if exists on_product_created on public.product_catalog;
 create trigger on_product_created
   after insert on public.product_catalog
