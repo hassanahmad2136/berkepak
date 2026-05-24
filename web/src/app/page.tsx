@@ -18,6 +18,7 @@ export default async function HomePage() {
         <HeroSlideshow />
       </section>
 
+      {/* 
       <section className="mx-auto max-w-[1440px] px-4 sm:px-8 py-20">
         <div className="flex items-end justify-between gap-6">
           <div>
@@ -36,6 +37,7 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+      */}
 
       {fabricOfMonth && (
         <section className="bg-mist">
@@ -111,7 +113,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-stone">
+      <section className="border-t border-stone">
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-16 grid gap-10 sm:grid-cols-3 text-sm">
           <div>
             <p className="eyebrow">Ships from Lahore</p>
