@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/utils/redirect";
 
 export type AuthState =
   | undefined
@@ -11,11 +12,6 @@ export type AuthState =
   | { pendingConfirmation: true; email: string };
 
 const PK_MOBILE_RE = /^(?:\+92|0)3\d{9}$/;
-
-function safeRedirectPath(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/account";
-  return next;
-}
 
 function normalizePhone(raw: string): string {
   return raw.replace(/[\s-]/g, "");

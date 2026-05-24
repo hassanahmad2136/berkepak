@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/utils/redirect";
 
 /**
  * Auth callback for both email confirmation links and OAuth redirects.
@@ -32,6 +33,6 @@ export async function GET(request: Request) {
     }
   }
 
-  const safePath = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  const safePath = safeRedirectPath(next);
   return NextResponse.redirect(new URL(safePath, url.origin));
 }
