@@ -407,6 +407,15 @@ export async function adminDeleteProduct(productId: string): Promise<AdminResult
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 async function notifyAdminsOfChange(actionName: string, details: string) {
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = parseInt(process.env.SMTP_PORT || "465");
@@ -426,17 +435,17 @@ async function notifyAdminsOfChange(actionName: string, details: string) {
       await transporter.sendMail({
         from: `"BerkePak Fabrics" <${smtpUser}>`,
         to: "admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com",
-        subject: `⚠️ Admin Action Alert: ${actionName}`,
+        subject: `Admin Action Alert: ${escapeHtml(actionName)}`,
         html: `
           <div style="font-family:sans-serif;padding:20px;background:#fafaf9;color:#1c1917;">
             <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;border:1px solid #e7e5e4;">
               <h2 style="font-size:20px;font-weight:700;color:#b91c1c;margin-bottom:20px;border-bottom:2px solid #f5f5f4;padding-bottom:10px;">
                 Admin Action Logged
               </h2>
-              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${actionName}</p>
+              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${escapeHtml(actionName)}</p>
               <p style="font-size:14px;margin-bottom:12px;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
               <div style="background:#f5f5f4;padding:15px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;margin-top:15px;border-left:4px solid #b91c1c;">
-                ${details}
+                ${escapeHtml(details)}
               </div>
             </div>
           </div>
