@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getProductByIdAsync } from "@/lib/products";
 import { saleorFetch, isSaleorConfigured, SaleorError } from "@/lib/saleor/client";
@@ -132,6 +132,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
     const variantId = product.suitVariantId;
+    const color = "White"; // CartLine has no color field; default to White
 
     return {
       product_id: product.id,
@@ -143,6 +144,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching: line.stitching,
       stitching_addon: stitchingAddon,
       line_total: lineTotal,
+      color,
       variantId,
     };
   }));
@@ -285,6 +287,22 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       line_total: it.line_total,
     })));
   if (itemsErr) return { ok: false, error: itemsErr.message };
+
+  // -----------------------------------------------------------------------
+  // Step C: Decrement product_colors stock (non-fatal — order already saved)
+  // -----------------------------------------------------------------------
+  const adminClient = createSupabaseAdmin();
+  for (const it of items) {
+    const { error: decErr } = await adminClient.rpc("decrement_product_stock", {
+      p_product_id: it.product_id,
+      p_color_name: it.color,
+      p_quantity: it.quantity,
+    });
+    if (decErr) {
+      console.error(`Stock decrement failed for product ${it.product_id}:`, decErr.message);
+      // Non-fatal: order is saved, stock reconciliation can be done manually
+    }
+  }
 
   revalidatePath("/account/orders");
   return { ok: true, orderId };
