@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, createSupabaseServer } from "@/lib/supabase/server";
 import { isCurrentUserAdmin } from "@/lib/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import nodemailer from "nodemailer";
 
 export type AdminResult = { ok: true } | { ok: false; error: string };
 
@@ -199,4 +200,250 @@ export async function bulkUpdatePrices(
   }
 
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Stock / Inventory admin — Supabase product_catalog only
+// ---------------------------------------------------------------------------
+
+export async function getAdminProductsWithVisibility(): Promise<{
+  ok: boolean;
+  products?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    sku: string;
+    price: number;
+    variantId: string;
+    available: boolean;
+  }>;
+  error?: string;
+}> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error || "Not an admin." };
+
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("product_catalog")
+    .select("id, name, slug, price_per_suit, is_active")
+    .order("name", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  const products = (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    slug: row.slug as string,
+    sku: row.slug as string,
+    price: row.price_per_suit as number,
+    variantId: row.id as string,
+    available: row.is_active as boolean,
+  }));
+
+  return { ok: true, products };
+}
+
+export async function updateProductColorStock(
+  catalogId: string,
+  colorName: string,
+  stock: number,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  if (stock < 0) return { ok: false, error: "Stock cannot be negative." };
+
+  const normalized = colorName.trim();
+  const admin = createSupabaseAdmin();
+  const { error } = await admin
+    .from("product_colors")
+    .update({ stock })
+    .eq("catalog_id", catalogId)
+    .eq("color_name", normalized);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  await notifyAdminsOfChange(
+    "Update Color Stock",
+    `Catalog ID: ${catalogId}\nColor: ${normalized}\nNew Stock: ${stock}`,
+  );
+
+  return { ok: true };
+}
+
+export async function getProductColorsForAdmin(): Promise<{
+  ok: boolean;
+  productColors?: Array<{
+    id: string;
+    catalog_id: string;
+    color_name: string;
+    image_url: string | null;
+    stock: number;
+    product_name?: string;
+  }>;
+  error?: string;
+}> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("product_colors")
+    .select("id, catalog_id, color_name, image_url, stock, product_catalog(name)")
+    .order("color_name", { ascending: true });
+
+  if (error) return { ok: false, error: error.message };
+
+  const formatted = (data ?? []).map((item: any) => ({
+    id: item.id,
+    catalog_id: item.catalog_id,
+    color_name: item.color_name,
+    image_url: item.image_url,
+    stock: item.stock,
+    product_name: item.product_catalog?.name ?? "Unknown Product",
+  }));
+
+  return { ok: true, productColors: formatted };
+}
+
+export async function toggleProductVisibility(
+  productId: string,
+  visible: boolean,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  const { error } = await admin
+    .from("product_catalog")
+    .update({ is_active: visible, updated_at: new Date().toISOString() })
+    .eq("id", productId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange(
+    "Toggle Product Visibility",
+    `Product ID: ${productId}\nVisible: ${visible}`,
+  );
+
+  return { ok: true };
+}
+
+export async function adminCreateProduct(
+  name: string,
+  slug: string,
+  categoryKey: string,
+  pricePerSuit: number,
+  composition: string,
+  description: string,
+): Promise<{ ok: boolean; productId?: string; error?: string }> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("product_catalog")
+    .insert({
+      slug,
+      name,
+      category: categoryKey,
+      price_per_suit: pricePerSuit,
+      price_per_meter: 0,
+      composition,
+      description,
+      short_description:
+        description.length > 120 ? description.slice(0, 117) + "..." : description,
+      is_active: true,
+      is_new: false,
+      is_featured: false,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/pricing");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange(
+    "Create New Product",
+    `Product: ${name}\nSlug: ${slug}\nCategory: ${categoryKey}\nPrice: ${pricePerSuit} PKR`,
+  );
+
+  return { ok: true, productId: data.id };
+}
+
+export async function adminDeleteProduct(productId: string): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  // Cascade deletes product_colors automatically via FK ON DELETE CASCADE
+  const { error } = await admin
+    .from("product_catalog")
+    .delete()
+    .eq("id", productId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/pricing");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange(
+    "Delete Product",
+    `Product ID: ${productId} permanently deleted from product_catalog (colors cascade-deleted).`,
+  );
+
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+async function notifyAdminsOfChange(actionName: string, details: string) {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = parseInt(process.env.SMTP_PORT || "465");
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+
+  if (smtpHost && smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: { user: smtpUser, pass: smtpPass },
+        tls: { rejectUnauthorized: false },
+      });
+
+      await transporter.sendMail({
+        from: `"BerkePak Fabrics" <${smtpUser}>`,
+        to: "admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com",
+        subject: `⚠️ Admin Action Alert: ${actionName}`,
+        html: `
+          <div style="font-family:sans-serif;padding:20px;background:#fafaf9;color:#1c1917;">
+            <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;border:1px solid #e7e5e4;">
+              <h2 style="font-size:20px;font-weight:700;color:#b91c1c;margin-bottom:20px;border-bottom:2px solid #f5f5f4;padding-bottom:10px;">
+                Admin Action Logged
+              </h2>
+              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${actionName}</p>
+              <p style="font-size:14px;margin-bottom:12px;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
+              <div style="background:#f5f5f4;padding:15px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;margin-top:15px;border-left:4px solid #b91c1c;">
+                ${details}
+              </div>
+            </div>
+          </div>
+        `,
+      });
+    } catch (err: any) {
+      console.error("Failed to send admin notification email:", err);
+    }
+  }
 }

@@ -71,6 +71,9 @@ const SELECT_FIELDS = `
   product_colors ( id, color_name, image_url, stock )
 `;
 
+// Module-level cache for sync helpers (populated after first getProducts() call)
+let _productCache: Product[] = [];
+
 export async function getProducts(): Promise<Product[]> {
   const supabase = createAnonClient();
   const { data, error } = await supabase
@@ -80,7 +83,9 @@ export async function getProducts(): Promise<Product[]> {
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(`getProducts: ${error.message}`);
-  return (data as CatalogRow[]).map(mapRow);
+  const products = (data as CatalogRow[]).map(mapRow);
+  _productCache = products;
+  return products;
 }
 
 export async function getProductBySlugAsync(slug: string): Promise<Product | null> {
@@ -134,12 +139,12 @@ export async function getFeaturedAsync(): Promise<Product[]> {
   return (data as CatalogRow[]).map(mapRow);
 }
 
-// Synchronous helpers — operate on a pre-loaded Product array.
-// Callers must fetch with getProducts() first.
-export function getProductBySlug(slug: string, products: Product[]): Product | undefined {
-  return products.find(p => p.slug === slug);
+// Synchronous helpers — use module-level cache populated by getProducts().
+// Cart and drawer components call these; they work after first server render populates cache.
+export function getProductBySlug(slug: string): Product | undefined {
+  return _productCache.find(p => p.slug === slug);
 }
 
-export function getProductById(id: string, products: Product[]): Product | undefined {
-  return products.find(p => p.id === id);
+export function getProductById(id: string): Product | undefined {
+  return _productCache.find(p => p.id === id);
 }

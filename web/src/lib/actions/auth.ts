@@ -106,3 +106,46 @@ export async function resendConfirmationAction(email: string): Promise<AuthState
   if (error) return { error: error.message };
   return { pendingConfirmation: true, email };
 }
+
+export async function forgotPasswordAction(
+  _prev: any,
+  formData: FormData,
+): Promise<{ success?: boolean; error?: string }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email) return { error: "Please enter your email address." };
+
+  try {
+    const origin = await siteOrigin();
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    });
+    if (error) return { error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message || "An unexpected error occurred." };
+  }
+}
+
+export async function resetPasswordAction(
+  _prev: any,
+  formData: FormData,
+): Promise<{ success?: boolean; error?: string }> {
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!password) return { error: "Please enter a new password." };
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirmPassword) return { error: "Passwords do not match." };
+
+  try {
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { error: error.message };
+  } catch (err: any) {
+    return { error: err.message || "Failed to reset password." };
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/login?error=Password%20reset%20successfully.%20Please%20sign%20in%20with%20your%20new%20password.");
+}

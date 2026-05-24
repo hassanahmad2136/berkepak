@@ -1,7 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
+import Image from "next/image"; // still used in fabricOfMonth + category grid
 import { ProductCard } from "@/components/ProductCard";
 import { getNewArrivalsAsync, getFeaturedAsync, getProducts } from "@/lib/products";
+import { HeroSlideshow } from "@/components/HeroSlideshow";
 
 export default async function HomePage() {
   const [newArrivals, featured, allProducts] = await Promise.all([
@@ -14,37 +15,7 @@ export default async function HomePage() {
   return (
     <>
       <section className="relative h-[88dvh] w-full overflow-hidden">
-        <Image
-          src="/hero/banner-1.jpg"
-          alt="Editorial fabric drape"
-          fill
-          priority
-          fetchPriority="high"
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/40" />
-        <div className="relative z-10 mx-auto flex h-full max-w-[1440px] flex-col justify-end px-4 pb-16 sm:px-8 sm:pb-24 text-paper fade-up">
-          <p className="eyebrow">Spring Edit · Volume IV</p>
-          <h1 className="display mt-4 text-5xl sm:text-7xl lg:text-8xl max-w-4xl">
-            Quiet luxury,<br />by the suit.
-          </h1>
-          <p className="mt-6 max-w-md text-sm text-paper/85">
-            Editorial fabrics for the discerning — sourced from heritage mills,
-            sold without compromise.
-          </p>
-          <div className="mt-8 flex gap-3">
-            <Link href="/shop" className="btn btn-primary !border-paper !bg-paper !text-ink">
-              Shop the Edit
-            </Link>
-            <Link
-              href="/shop?category=silk"
-              className="btn btn-ghost !border-paper !text-paper hover:!bg-paper hover:!text-ink"
-            >
-              Discover Silk
-            </Link>
-          </div>
-        </div>
+        <HeroSlideshow />
       </section>
 
       <section className="mx-auto max-w-[1440px] px-4 sm:px-8 py-20">

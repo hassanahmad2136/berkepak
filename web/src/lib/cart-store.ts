@@ -9,7 +9,6 @@ import {
   type Stitching,
 } from "./types";
 import { getProductById, getProductBySlug } from "./products";
-import type { Product } from "./types";
 
 interface CartState {
   lines: CartLine[];
@@ -23,19 +22,30 @@ interface CartState {
     unit: SaleUnit,
     quantity?: number,
     stitching?: Stitching,
+    color?: string,
   ) => void;
   setQuantity: (
     productId: string,
     unit: SaleUnit,
     stitching: Stitching,
+    color: string,
     quantity: number,
   ) => void;
-  remove: (productId: string, unit: SaleUnit, stitching: Stitching) => void;
+  remove: (
+    productId: string,
+    unit: SaleUnit,
+    stitching: Stitching,
+    color: string,
+  ) => void;
   clear: () => void;
 }
 
-const lineKey = (productId: string, unit: SaleUnit, stitching: Stitching) =>
-  `${productId}::${unit}::${stitching}`;
+const lineKey = (
+  productId: string,
+  unit: SaleUnit,
+  stitching: Stitching,
+  color: string,
+) => `${productId}::${unit}::${stitching}::${color}`;
 
 export const useCart = create<CartState>()(
   persist(
@@ -45,11 +55,20 @@ export const useCart = create<CartState>()(
       open: () => set({ isOpen: true }),
       close: () => set({ isOpen: false }),
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
-      add: (productId, productSlug, unit, quantity = 1, stitching = "none") =>
+      add: (
+        productId,
+        productSlug,
+        unit,
+        quantity = 1,
+        stitching = "none",
+        color = "White",
+      ) =>
         set((s) => {
-          const key = lineKey(productId, unit, stitching);
+          const key = lineKey(productId, unit, stitching, color);
           const existing = s.lines.find(
-            (l) => lineKey(l.productId, l.unit, l.stitching) === key,
+            (l) =>
+              lineKey(l.productId, l.unit, l.stitching, l.color || "White") ===
+              key,
           );
           if (existing) {
             return {
@@ -60,28 +79,35 @@ export const useCart = create<CartState>()(
             };
           }
           return {
-            lines: [...s.lines, { productId, productSlug, unit, quantity, stitching }],
+            lines: [
+              ...s.lines,
+              { productId, productSlug, unit, quantity, stitching, color },
+            ],
             isOpen: true,
           };
         }),
-      setQuantity: (productId, unit, stitching, quantity) =>
+      setQuantity: (productId, unit, stitching, color, quantity) =>
         set((s) => ({
           lines: s.lines
             .map((l) =>
-              l.productId === productId && l.unit === unit && l.stitching === stitching
+              l.productId === productId &&
+              l.unit === unit &&
+              l.stitching === stitching &&
+              (l.color || "White") === color
                 ? { ...l, quantity }
                 : l,
             )
             .filter((l) => l.quantity > 0),
         })),
-      remove: (productId, unit, stitching) =>
+      remove: (productId, unit, stitching, color) =>
         set((s) => ({
           lines: s.lines.filter(
             (l) =>
               !(
                 l.productId === productId &&
                 l.unit === unit &&
-                l.stitching === stitching
+                l.stitching === stitching &&
+                (l.color || "White") === color
               ),
           ),
         })),
@@ -89,15 +115,24 @@ export const useCart = create<CartState>()(
     }),
     {
       name: "berkepak-cart",
-      version: 2,
-      // Drop pre-stitching cart entries on upgrade so we don't crash on missing field.
-      migrate: (state) => ({ ...(state as CartState), lines: [] }),
+      version: 3,
+      migrate: (persistedState, version) => {
+        let state = persistedState as any;
+        if (version < 3) {
+          const lines = (state?.lines || []).map((l: any) => ({
+            ...l,
+            color: l.color || "White",
+          }));
+          state = { ...state, lines };
+        }
+        return state;
+      },
     },
   ),
 );
 
-export function lineSubtotal(line: CartLine, products: Product[]): number {
-  const product = getProductById(line.productId, products) ?? (line.productSlug ? getProductBySlug(line.productSlug, products) : undefined);
+export function lineSubtotal(line: CartLine): number {
+  const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
   if (!product) return 0;
   const unitPrice =
     line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
@@ -108,8 +143,8 @@ export function lineSubtotal(line: CartLine, products: Product[]): number {
   return (unitPrice + addon) * line.quantity;
 }
 
-export function cartSubtotal(lines: CartLine[], products: Product[]): number {
-  return lines.reduce((sum, l) => sum + lineSubtotal(l, products), 0);
+export function cartSubtotal(lines: CartLine[]): number {
+  return lines.reduce((sum, l) => sum + lineSubtotal(l), 0);
 }
 
 export function cartItemCount(lines: CartLine[]): number {

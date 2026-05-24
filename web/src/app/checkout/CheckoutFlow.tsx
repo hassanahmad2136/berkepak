@@ -5,11 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
 import { getProductById, getProductBySlug } from "@/lib/products";
-import { useProducts } from "@/lib/use-products";
 import { formatPKR } from "@/lib/format";
 import type { Address, PaymentMethod } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
 import { placeOrder } from "@/lib/actions/orders";
+import { ReceiptUploadForm } from "@/app/account/receipts/ReceiptUploadForm";
 
 type Step = 1 | 2 | 3;
 
@@ -31,7 +31,6 @@ export function CheckoutFlow({
   userEmail: string;
 }) {
   const { lines, clear } = useCart();
-  const products = useProducts();
   const [step, setStep] = useState<Step>(1);
   const [address, setAddress] = useState<Address>({
     fullName: defaults.fullName,
@@ -44,7 +43,7 @@ export function CheckoutFlow({
     country: "Pakistan",
   });
   const [payment, setPayment] = useState<PaymentMethod>("cod");
-  const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("whatsapp");
+  const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("email");
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -54,7 +53,7 @@ export function CheckoutFlow({
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
 
-  const subtotal = useMemo(() => cartSubtotal(lines, products), [lines, products]);
+  const subtotal = useMemo(() => cartSubtotal(lines), [lines]);
   const shipping = subtotal === 0 ? 0 : subtotal >= 10000 ? 0 : 350;
   const total = subtotal + shipping;
 
@@ -211,16 +210,17 @@ export function CheckoutFlow({
                       <div className="mt-5 border-t border-stone pt-4">
                         <p className="eyebrow text-muted">Choose Verification Method</p>
                         <div className="mt-2 flex flex-wrap gap-4 text-xs">
-                          <label className="flex items-center gap-2 cursor-pointer">
+                          <label className="flex items-center gap-2 cursor-not-allowed opacity-40">
                             <input
                               type="radio"
                               name="otpMethod"
-                              disabled={otpSent}
-                              checked={otpMethod === "whatsapp"}
-                              onChange={() => selectOtpMethod("whatsapp")}
+                              disabled={true}
+                              checked={false}
+                              onChange={() => {}}
                               className="accent-ink"
                             />
-                            <span>WhatsApp ({address.phone || "mobile"})</span>
+                            <span className="line-through">WhatsApp ({address.phone || "mobile"})</span>
+                            <span className="text-[9px] uppercase font-bold text-red-700 bg-red-50 border border-red-200 px-1 py-0.5 rounded">Inactive</span>
                           </label>
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -400,11 +400,12 @@ export function CheckoutFlow({
           <p className="eyebrow text-muted">Order summary</p>
           <ul className="mt-4 divide-y divide-stone">
             {lines.map((line) => {
-              const product = getProductById(line.productId, products) ?? (line.productSlug ? getProductBySlug(line.productSlug, products) : undefined);
+              const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
               if (!product) return null;
+              const activeColor = line.color || "White";
               return (
                 <li
-                  key={`${line.productId}-${line.unit}-${line.stitching}`}
+                  key={`${line.productId}-${line.unit}-${line.stitching}-${activeColor}`}
                   className="flex gap-3 py-3"
                 >
                   <div className="relative h-16 w-12 shrink-0 bg-mist overflow-hidden">
@@ -416,14 +417,27 @@ export function CheckoutFlow({
                       className="object-cover"
                     />
                   </div>
-                  <div className="flex-1 text-sm">
-                    <p className="truncate">{product.name}</p>
-                    <p className="text-xs text-muted">
+                  <div className="flex-1 text-sm min-w-0">
+                    <p className="truncate font-medium">{product.name}</p>
+                    <p className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
+                      <span className="inline-block w-2 h-2 rounded-full border border-stone/50" style={{
+                        backgroundColor: activeColor.toLowerCase() === "white" ? "#ffffff" : 
+                                         activeColor.toLowerCase() === "black" ? "#000000" :
+                                         activeColor.toLowerCase() === "blue" ? "#0000ff" : 
+                                         activeColor.toLowerCase() === "red" ? "#ff0000" :
+                                         activeColor.toLowerCase() === "green" ? "#008000" :
+                                         activeColor.toLowerCase() === "beige" ? "#f5f5dc" :
+                                         activeColor.toLowerCase() === "gray" || activeColor.toLowerCase() === "grey" ? "#808080" : 
+                                         "#dddddd"
+                      }} />
+                      <span>{activeColor}</span>
+                    </p>
+                    <p className="text-xs text-muted mt-0.5">
                       {line.quantity} × by the {line.unit}
                       {line.stitching === "bespoke" && " · Bespoke"}
                     </p>
                   </div>
-                  <p className="text-sm">{formatPKR(lineSubtotal(line, products))}</p>
+                  <p className="text-sm shrink-0">{formatPKR(lineSubtotal(line))}</p>
                 </li>
               );
             })}
@@ -478,13 +492,14 @@ function Confirmation({
             <dt className="text-muted">Raast ID</dt>
             <dd>03000000000</dd>
           </dl>
-          <p className="mt-4 text-xs text-muted">
-            Once you've transferred, upload your receipt from{" "}
-            <Link href="/account/receipts" className="link-underline">
-              Account → Receipts
-            </Link>
-            . We'll release fulfillment after manual verification.
-          </p>
+          
+          <div className="mt-8 border-t border-stone pt-6">
+            <p className="eyebrow text-muted">Upload Proof of Payment</p>
+            <p className="text-xs text-muted mt-1">
+              Please transfer the total amount using the Meezan or Raast details above, then upload a screenshot of your transfer receipt here.
+            </p>
+            <ReceiptUploadForm pendingOrderIds={[orderId]} />
+          </div>
         </div>
       )}
 

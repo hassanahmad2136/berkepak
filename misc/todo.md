@@ -27,15 +27,15 @@ to keep in mind what we add for mens fabric while selling
 
 6. WA enablemnt and code sent ~~also email~~
 7. WA Chatbot (api seems to be running just add the bot features)
-8. EMAIL NOTIFICAITONS (SENDGRID)
+8. EMAIL NOTIFICAITONS ~~(SENDGRID)~~ using smtp
 
 ### **Bug fixes:**
 
-1. Payemnt upload screenshot screen? something like confirmation after seletion of the oprion and then place order and screen to upload proof and then automated emil after manual verifcation sendt.
+1. ~~Payemnt upload screenshot screen? something like confirmation after seletion of the oprion and then place order and screen to upload proof and then automated emil after manual verifcation sendt.~~
 2. need to make sure every error has proper error page/messgae not website stuck crashed or smth
 3. need to make sure supabase db and saleor are in sync wrt to everything in the site
-4. subscribe needs fix
-5. Forgot password add
+4. ~~subscribe needs fix~~
+5. ~~Forgot password add~~
 6. change. in google auth You're signing back in to qlluilxjenwctwahignx.supabase.co
 7. apple auth remove or add
 
