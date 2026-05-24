@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
   type CartLine,
+  type Product,
   type SaleUnit,
   type Stitching,
 } from "./types";
@@ -131,8 +132,11 @@ export const useCart = create<CartState>()(
   ),
 );
 
-export function lineSubtotal(line: CartLine): number {
-  const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+export function lineSubtotal(line: CartLine, resolvedProduct?: Product): number {
+  const product =
+    resolvedProduct ??
+    getProductById(line.productId) ??
+    (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
   if (!product) return 0;
   const unitPrice =
     line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
@@ -143,8 +147,8 @@ export function lineSubtotal(line: CartLine): number {
   return (unitPrice + addon) * line.quantity;
 }
 
-export function cartSubtotal(lines: CartLine[]): number {
-  return lines.reduce((sum, l) => sum + lineSubtotal(l), 0);
+export function cartSubtotal(lines: CartLine[], productMap?: Map<string, Product>): number {
+  return lines.reduce((sum, l) => sum + lineSubtotal(l, productMap?.get(l.productId)), 0);
 }
 
 export function cartItemCount(lines: CartLine[]): number {

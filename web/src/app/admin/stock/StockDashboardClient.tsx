@@ -21,7 +21,7 @@ interface ProductItem {
 
 interface ProductColor {
   id: string;
-  product_id: string;
+  catalog_id: string;
   color_name: string;
   image_url: string | null;
   stock: number;
@@ -130,7 +130,7 @@ export function StockDashboardClient({
     setSuccessIds((prev) => ({ ...prev, [c.id]: false }));
 
     try {
-      const res = await updateProductColorStock(c.product_id, c.color_name, newStock);
+      const res = await updateProductColorStock(c.catalog_id, c.color_name, newStock);
       if (res.ok) {
         setColors((prev) =>
           prev.map((item) => (item.id === c.id ? { ...item, stock: newStock } : item))
@@ -173,7 +173,7 @@ export function StockDashboardClient({
       const res = await adminDeleteProduct(productId);
       if (res.ok) {
         setLocalProducts((prev) => prev.filter((p) => p.id !== productId));
-        setColors((prev) => prev.filter((c) => c.product_id !== productId));
+        setColors((prev) => prev.filter((c) => c.catalog_id !== productId));
         setShowDeleteConfirm(null);
       } else {
         alert(res.error || "Failed to delete product.");
@@ -282,7 +282,7 @@ export function StockDashboardClient({
       ) : (
         <div className="space-y-6">
           {filteredProducts.map((p) => {
-            const productColors = colors.filter((c) => c.product_id === p.id);
+            const productColors = colors.filter((c) => c.catalog_id === p.id);
 
             return (
               <div

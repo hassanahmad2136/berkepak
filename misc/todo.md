@@ -9,6 +9,7 @@
 ~~Partner mill 4~~
 ~~Partner mill 5~~
 ~~Partner mill 6~~
+
 3. the current theme layout and style are good for the style but need to fix things wrt whatwe are selling
 
 keep this site as a refrence https://www.greenflagfabrics.com/
@@ -26,23 +27,23 @@ to keep in mind what we add for mens fabric while selling
 
 6. WA enablemnt and code sent ~~also email~~
 7. WA Chatbot (api seems to be running just add the bot features)
-8. EMAIL NOTIFICAITONS
+8. EMAIL NOTIFICAITONS ~~(SENDGRID)~~ using smtp
 
 ### **Bug fixes:**
 
-1. Payemnt upload screenshot screen? something like confirmation after seletion of the oprion and then place order and screen to upload proof and then automated emil after manual verifcation sendt.
+1. ~~Payemnt upload screenshot screen? something like confirmation after seletion of the oprion and then place order and screen to upload proof and then automated emil after manual verifcation sendt.~~
 2. need to make sure every error has proper error page/messgae not website stuck crashed or smth
 3. need to make sure supabase db and saleor are in sync wrt to everything in the site
-4. subscribe needs fix
-5. Forgot password add
+4. ~~subscribe needs fix~~
+5. ~~Forgot password add~~
 6. change. in google auth You're signing back in to qlluilxjenwctwahignx.supabase.co
 7. apple auth remove or add
-8. ~~admin panel button for admin accs~~
+
 
 ### **Later:**
 
-- ~~COLOR FOR SUITES ADD~~
-- ~~admin any change sends a email to admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com~~
+- COLOR FOR SUITES ADD
+- admin any change sends a email to admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com (sendgrid)
 1. SMS
 2. Payemet gateway
 3. Overall rate limiting, auth and authorizations
@@ -56,11 +57,6 @@ to keep in mind what we add for mens fabric while selling
     The frontend requires some changes to provide the CAPTCHA on-screen for the user. Turnstile can be used with any JavaScript framework but we'll use React and the Turnstile React component for this example.
 
 8. FB auth?
-9. Summer winter segregation?
-10. discount percentage and display on products
-11. review section
 
 ### **Ideas?**:
-
-1. inven manager (mongo) + this site (PG+ Saleour)
 

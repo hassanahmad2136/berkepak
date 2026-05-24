@@ -3,12 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getProductById, getProductBySlug } from "@/lib/products";
+import { getProductByIdAsync } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
+import type { Product } from "@/lib/types";
 
 export function CartDrawer() {
   const { isOpen, close, lines, setQuantity, remove } = useCart();
+  const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
@@ -17,7 +19,19 @@ export function CartDrawer() {
     };
   }, [isOpen]);
 
-  const subtotal = cartSubtotal(lines);
+  useEffect(() => {
+    if (lines.length === 0) return;
+    const ids = [...new Set(lines.map((l) => l.productId))];
+    Promise.all(ids.map((id) => getProductByIdAsync(id))).then((results) => {
+      setProductMap((prev) => {
+        const next = new Map(prev);
+        results.forEach((p, i) => { if (p) next.set(ids[i], p); });
+        return next;
+      });
+    });
+  }, [lines]);
+
+  const subtotal = cartSubtotal(lines, productMap);
 
   return (
     <>
@@ -56,7 +70,7 @@ export function CartDrawer() {
           ) : (
             <ul>
               {lines.map((line) => {
-                const product = getProductById(line.productId) ?? (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+                const product = productMap.get(line.productId);
                 if (!product) return null;
                 const activeColor = line.color || "White";
                 return (
@@ -102,7 +116,7 @@ export function CartDrawer() {
                             {line.stitching === "bespoke" && " · Bespoke"}
                           </div>
                         </div>
-                        <p className="text-sm">{formatPKR(lineSubtotal(line))}</p>
+                        <p className="text-sm">{formatPKR(lineSubtotal(line, product))}</p>
                       </div>
                       <div className="mt-auto flex items-center justify-between">
                         <div className="flex items-center border border-stone">

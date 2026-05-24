@@ -48,10 +48,10 @@ export default async function ProductPage(props: {
   const product = await getProductBySlugAsync(slug);
   if (!product || !product.available) notFound();
 
-  // Fetch color varieties and stock from Supabase
+  // Fetch color varieties and stock from product_colors via catalog_id
   let dbColors = [
     { color_name: "White", image_url: null, stock: 10 },
-    { color_name: "Black", image_url: null, stock: 10 }
+    { color_name: "Black", image_url: null, stock: 10 },
   ];
 
   try {
@@ -59,9 +59,9 @@ export default async function ProductPage(props: {
     const { data: colorsData } = await supabase
       .from("product_colors")
       .select("color_name, image_url, stock")
-      .eq("product_id", product.id)
+      .eq("catalog_id", product.id)
       .order("color_name", { ascending: true });
-    
+
     if (colorsData && colorsData.length > 0) {
       dbColors = colorsData;
     }

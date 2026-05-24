@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import Image from "next/image"; // still used in fabricOfMonth + category grid
 import { ProductCard } from "@/components/ProductCard";
 import { getNewArrivalsAsync, getFeaturedAsync, getProducts } from "@/lib/products";
 import { HeroSlideshow } from "@/components/HeroSlideshow";

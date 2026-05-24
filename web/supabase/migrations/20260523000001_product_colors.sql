@@ -59,8 +59,8 @@ select id, 'Black', 10 from public.products
 on conflict (product_id, color_name) do nothing;
 
 -- 5. Create public storage bucket for color-separated product images
-insert into storage.buckets (id, name, public)
-values ('product-images', 'product-images', true)
+insert into storage.buckets (id, name)
+values ('product-images', 'product-images')
 on conflict (id) do nothing;
 
 -- Drop existing storage select policy if it exists
