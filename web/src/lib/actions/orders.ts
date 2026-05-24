@@ -58,7 +58,6 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         : 0;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
-    const variantId = product.suitVariantId;
     const color = "White"; // CartLine has no color field; default to White
 
     return {
@@ -72,7 +71,6 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching_addon: stitchingAddon,
       line_total: lineTotal,
       color,
-      variantId,
     };
   }));
 
@@ -113,6 +111,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching: it.stitching,
       stitching_addon: it.stitching_addon,
       line_total: it.line_total,
+      color: it.color,
     })));
   if (itemsErr) return { ok: false, error: itemsErr.message };
 
