@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/utils/redirect";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export type AuthState =
   | undefined
@@ -30,6 +31,9 @@ export async function signupAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
+  const rl = await checkRateLimit("auth_signup", 5, 60000);
+  if (!rl.success) return { error: "Too many signup attempts. Please wait a minute." };
+
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const phoneRaw = String(formData.get("phone") ?? "").trim();
@@ -76,6 +80,9 @@ export async function loginAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
+  const rl = await checkRateLimit("auth_login", 10, 60000);
+  if (!rl.success) return { error: "Too many login attempts. Please wait a minute." };
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/account");
@@ -112,6 +119,9 @@ export async function forgotPasswordAction(
   _prev: any,
   formData: FormData,
 ): Promise<{ success?: boolean; error?: string }> {
+  const rl = await checkRateLimit("auth_forgot", 3, 300000);
+  if (!rl.success) return { error: "Too many password reset requests. Please wait 5 minutes." };
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) return { error: "Please enter your email address." };
 
