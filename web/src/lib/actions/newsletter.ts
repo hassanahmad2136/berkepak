@@ -2,8 +2,11 @@
 
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import nodemailer from "nodemailer";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function subscribeToNewsletter(email: string): Promise<{ ok: boolean; error?: string }> {
+  const rl = await checkRateLimit("newsletter_subscribe", 3, 60000);
+  if (!rl.success) return { ok: false, error: "Too many requests. Please try again later." };
   if (!email || !email.trim()) return { ok: false, error: "Email is required." };
   const normalized = email.trim().toLowerCase();
 
