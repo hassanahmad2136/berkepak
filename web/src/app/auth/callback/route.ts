@@ -32,5 +32,6 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL(next, url.origin));
+  const safePath = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  return NextResponse.redirect(new URL(safePath, url.origin));
 }

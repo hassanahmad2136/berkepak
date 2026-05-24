@@ -12,6 +12,11 @@ export type AuthState =
 
 const PK_MOBILE_RE = /^(?:\+92|0)3\d{9}$/;
 
+function safeRedirectPath(next: string | null | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/account";
+  return next;
+}
+
 function normalizePhone(raw: string): string {
   return raw.replace(/[\s-]/g, "");
 }
@@ -84,7 +89,7 @@ export async function loginAction(
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");
-  redirect(next);
+  redirect(safeRedirectPath(next));
 }
 
 export async function logoutAction() {
