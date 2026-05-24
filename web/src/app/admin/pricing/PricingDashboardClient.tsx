@@ -342,7 +342,7 @@ export function PricingDashboardClient({ initialProducts }: PricingDashboardClie
                         )}
                         {itemSuccess && (
                           <p className="text-[11px] text-emerald-700 mt-1 font-semibold flex items-center gap-1">
-                            ✓ Synced with Saleor &amp; Supabase
+                            ✓ Synced with Supabase
                           </p>
                         )}
                       </td>

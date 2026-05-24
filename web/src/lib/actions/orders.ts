@@ -4,14 +4,6 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getProductByIdAsync } from "@/lib/products";
-import { saleorFetch, isSaleorConfigured, SaleorError } from "@/lib/saleor/client";
-import {
-  CHECKOUT_CREATE_MUTATION,
-  CHECKOUT_SHIPPING_ADDRESS_UPDATE_MUTATION,
-  CHECKOUT_BILLING_ADDRESS_UPDATE_MUTATION,
-  CHECKOUT_DELIVERY_METHOD_UPDATE_MUTATION,
-  CHECKOUT_COMPLETE_MUTATION,
-} from "@/lib/saleor/queries";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
   type Address,
@@ -31,73 +23,8 @@ export type PlaceOrderResult =
   | { ok: true; orderId: string }
   | { ok: false; error: string };
 
-const CHANNEL = process.env.NEXT_PUBLIC_SALEOR_CHANNEL ?? "default-channel";
-const MUTATION_TIMEOUT = 10_000;
-
 function newOrderId(): string {
   return "BPK-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-function toSaleorAddress(addr: Address) {
-  const nameParts = addr.fullName.trim().split(/\s+/);
-  const firstName = nameParts[0] ?? "";
-  const lastName = nameParts.slice(1).join(" ") || firstName;
-  return {
-    firstName,
-    lastName,
-    streetAddress1: addr.line1,
-    streetAddress2: addr.line2 ?? "",
-    city: addr.city,
-    countryArea: addr.province,
-    postalCode: addr.postalCode,
-    country: "PK" as const,
-    phone: addr.phone,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Saleor checkout types (response shapes)
-// ---------------------------------------------------------------------------
-
-interface SaleorCheckoutCreateResponse {
-  checkoutCreate: {
-    checkout: {
-      id: string;
-      shippingMethods: Array<{ id: string; name: string }>;
-    } | null;
-    errors: Array<{ field: string | null; message: string; code: string }>;
-  };
-}
-
-interface SaleorShippingAddressResponse {
-  checkoutShippingAddressUpdate: {
-    checkout: {
-      id: string;
-      shippingMethods: Array<{ id: string; name: string }>;
-    } | null;
-    errors: Array<{ field: string | null; message: string; code: string }>;
-  };
-}
-
-interface SaleorBillingAddressResponse {
-  checkoutBillingAddressUpdate: {
-    checkout: { id: string } | null;
-    errors: Array<{ field: string | null; message: string; code: string }>;
-  };
-}
-
-interface SaleorDeliveryMethodResponse {
-  checkoutDeliveryMethodUpdate: {
-    checkout: { id: string } | null;
-    errors: Array<{ field: string | null; message: string; code: string }>;
-  };
-}
-
-interface SaleorCheckoutCompleteResponse {
-  checkoutComplete: {
-    order: { id: string; number: string } | null;
-    errors: Array<{ field: string | null; message: string; code: string }>;
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -154,108 +81,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const total = subtotal + shipping;
 
   // -----------------------------------------------------------------------
-  // Step A: Saleor checkout flow (gatekeeper for inventory)
+  // Step B: Save to Supabase
   // -----------------------------------------------------------------------
-  let saleorOrderId: string | undefined;
-  let saleorOrderNumber: string | undefined;
-
-  if (isSaleorConfigured()) {
-    const mutationOpts = { cache: "no-store" as const, timeout: MUTATION_TIMEOUT };
-
-    // Verify all variant IDs resolved
-    const missingVariant = items.find((it) => !it.variantId);
-    if (missingVariant) {
-      return {
-        ok: false,
-        error: `Could not resolve variant for "${missingVariant.product_name}" (${missingVariant.unit}). Please contact support.`,
-      };
-    }
-
-    // 1. Create checkout
-    const checkoutLines = items.map((it) => ({
-      variantId: it.variantId!,
-      quantity: it.quantity,
-    }));
-
-    let checkoutId: string;
-    try {
-      const createRes = await saleorFetch<SaleorCheckoutCreateResponse>(
-        CHECKOUT_CREATE_MUTATION,
-        { channel: CHANNEL, lines: checkoutLines, email: `${input.address.phone.replace(/[^0-9]/g, "")}@berkepak.local` },
-        mutationOpts,
-      );
-      if (createRes.checkoutCreate.errors.length > 0) {
-        return { ok: false, error: createRes.checkoutCreate.errors[0].message };
-      }
-      checkoutId = createRes.checkoutCreate.checkout!.id;
-    } catch (err) {
-      const msg = err instanceof SaleorError ? err.message : "Saleor checkout failed.";
-      return { ok: false, error: msg };
-    }
-
-    // 2. Attach shipping + billing address
-    const saleorAddress = toSaleorAddress(input.address);
-    try {
-      const shippingRes = await saleorFetch<SaleorShippingAddressResponse>(
-        CHECKOUT_SHIPPING_ADDRESS_UPDATE_MUTATION,
-        { id: checkoutId, shippingAddress: saleorAddress },
-        mutationOpts,
-      );
-      if (shippingRes.checkoutShippingAddressUpdate.errors.length > 0) {
-        return { ok: false, error: shippingRes.checkoutShippingAddressUpdate.errors[0].message };
-      }
-
-      // Pick first available shipping method
-      const shippingMethods =
-        shippingRes.checkoutShippingAddressUpdate.checkout?.shippingMethods ?? [];
-
-      const billingRes = await saleorFetch<SaleorBillingAddressResponse>(
-        CHECKOUT_BILLING_ADDRESS_UPDATE_MUTATION,
-        { id: checkoutId, billingAddress: saleorAddress },
-        mutationOpts,
-      );
-      if (billingRes.checkoutBillingAddressUpdate.errors.length > 0) {
-        return { ok: false, error: billingRes.checkoutBillingAddressUpdate.errors[0].message };
-      }
-
-      // 3. Select delivery method
-      if (shippingMethods.length > 0) {
-        const deliveryRes = await saleorFetch<SaleorDeliveryMethodResponse>(
-          CHECKOUT_DELIVERY_METHOD_UPDATE_MUTATION,
-          { id: checkoutId, deliveryMethodId: shippingMethods[0].id },
-          mutationOpts,
-        );
-        if (deliveryRes.checkoutDeliveryMethodUpdate.errors.length > 0) {
-          return { ok: false, error: deliveryRes.checkoutDeliveryMethodUpdate.errors[0].message };
-        }
-      }
-    } catch (err) {
-      const msg = err instanceof SaleorError ? err.message : "Address/delivery update failed.";
-      return { ok: false, error: msg };
-    }
-
-    // 4. Complete checkout
-    try {
-      const completeRes = await saleorFetch<SaleorCheckoutCompleteResponse>(
-        CHECKOUT_COMPLETE_MUTATION,
-        { id: checkoutId },
-        mutationOpts,
-      );
-      if (completeRes.checkoutComplete.errors.length > 0) {
-        return { ok: false, error: completeRes.checkoutComplete.errors[0].message };
-      }
-      saleorOrderId = completeRes.checkoutComplete.order!.id;
-      saleorOrderNumber = completeRes.checkoutComplete.order!.number;
-    } catch (err) {
-      const msg = err instanceof SaleorError ? err.message : "Checkout completion failed.";
-      return { ok: false, error: msg };
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // Step B: Save to Supabase (with Saleor Order ID if available)
-  // -----------------------------------------------------------------------
-  const orderId = saleorOrderNumber ?? newOrderId();
+  const orderId = newOrderId();
 
   const { error: orderErr } = await supabase.from("orders").insert({
     id: orderId,
