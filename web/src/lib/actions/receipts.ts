@@ -43,10 +43,7 @@ export async function uploadReceipt(formData: FormData): Promise<UploadReceiptRe
   const path = `${userData.user.id}/${orderId}-${Date.now()}.${ext}`;
   const { error: uploadErr } = await supabase.storage
     .from("receipts")
-    .upload(path, file, {
-      contentType: ALLOWED_MIME.includes(file.type) ? file.type : "application/octet-stream",
-      upsert: false,
-    });
+    .upload(path, file, { contentType: file.type, upsert: false });
   if (uploadErr) return { ok: false, error: uploadErr.message };
 
   const { error: rowErr } = await supabase.from("receipts").insert({
