@@ -432,8 +432,8 @@ const products = [
   },
   {
     id: "p-220",
-    slug: "frasco",
-    name: "Frasco",
+    slug: "fresco",
+    name: "Fresco",
     category: "blended",
     weave: "twill",
     gsm: 170,
@@ -490,6 +490,16 @@ import {
   type SaleorProductsResponse,
   type SaleorSingleProductResponse,
 } from "./saleor/transforms";
+import { createClient } from "@supabase/supabase-js";
+
+function createAnonSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Default channel slug used by the Saleor backend
@@ -529,52 +539,99 @@ function updateCache(products: Product[]) {
 // =========================================================================
 
 export async function getProducts(): Promise<Product[]> {
-  if (!isSaleorConfigured()) return STATIC_PRODUCTS;
+  let list: Product[] = [];
 
-  try {
-    const data = await saleorFetch<SaleorProductsResponse>(PRODUCTS_QUERY, {
-      channel: CHANNEL,
-      first: 100,
-    });
-    const products = transformProducts(data);
-    if (products.length > 0) {
-      updateCache(products);
-      return products;
-    }
-  } catch (err) {
-    if (err instanceof SaleorError) {
-      console.warn("[BerkePak] Saleor unavailable, using static catalog:", err.message);
-    } else {
-      console.warn("[BerkePak] Saleor fetch failed, using static catalog:", err);
+  if (isSaleorConfigured()) {
+    try {
+      const data = await saleorFetch<SaleorProductsResponse>(PRODUCTS_QUERY, {
+        channel: CHANNEL,
+        first: 100,
+      });
+      const products = transformProducts(data);
+      if (products.length > 0) {
+        list = products;
+      }
+    } catch (err) {
+      if (err instanceof SaleorError) {
+        console.warn("[BerkePak] Saleor unavailable, using static catalog:", err.message);
+      } else {
+        console.warn("[BerkePak] Saleor fetch failed, using static catalog:", err);
+      }
     }
   }
 
-  return STATIC_PRODUCTS;
+  if (list.length === 0) {
+    list = STATIC_PRODUCTS.slice();
+  }
+
+  // Filter based on availability status in Supabase
+  try {
+    const supabase = createAnonSupabaseClient();
+    if (supabase) {
+      const { data: dbProducts } = await supabase
+        .from("products")
+        .select("id, available");
+
+      if (dbProducts && dbProducts.length > 0) {
+        const availabilityMap = new Map(dbProducts.map((p) => [p.id, p.available]));
+        list = list.filter((p) => availabilityMap.get(p.id) !== false);
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[BerkePak] Supabase lookup failed, showing all products:", dbErr);
+  }
+
+  updateCache(list);
+  return list;
 }
 
 export async function getProductBySlugAsync(
   slug: string,
 ): Promise<Product | undefined> {
+  let product: Product | undefined;
+
   if (!isSaleorConfigured()) {
-    return STATIC_PRODUCTS.find((p) => p.slug === slug);
-  }
-
-  try {
-    const data = await saleorFetch<SaleorSingleProductResponse>(
-      PRODUCT_BY_SLUG_QUERY,
-      { slug, channel: CHANNEL },
-    );
-    if (data.product) {
-      const product = transformProduct(data.product);
-      productMapById.set(product.id, product);
-      productMapBySlug.set(product.slug, product);
-      return product;
+    product = STATIC_PRODUCTS.find((p) => p.slug === slug);
+  } else {
+    try {
+      const data = await saleorFetch<SaleorSingleProductResponse>(
+        PRODUCT_BY_SLUG_QUERY,
+        { slug, channel: CHANNEL },
+      );
+      if (data.product) {
+        product = transformProduct(data.product);
+        productMapById.set(product.id, product);
+        productMapBySlug.set(product.slug, product);
+      }
+    } catch (err) {
+      console.warn("[BerkePak] Saleor slug lookup failed, using static:", err);
     }
-  } catch (err) {
-    console.warn("[BerkePak] Saleor slug lookup failed, using static:", err);
   }
 
-  return STATIC_PRODUCTS.find((p) => p.slug === slug);
+  if (!product) {
+    product = STATIC_PRODUCTS.find((p) => p.slug === slug);
+  }
+
+  if (product) {
+    try {
+      const supabase = createAnonSupabaseClient();
+      if (supabase) {
+        const { data: dbProd } = await supabase
+          .from("products")
+          .select("available")
+          .eq("id", product.id)
+          .single();
+        
+        if (dbProd) {
+          product.available = dbProd.available;
+        }
+      }
+    } catch (dbErr) {
+      console.warn("[BerkePak] Supabase availability query failed for product details:", dbErr);
+    }
+  }
+
+  return product;
 }
 
 export async function getProductByIdAsync(
