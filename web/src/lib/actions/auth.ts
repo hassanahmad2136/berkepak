@@ -103,6 +103,8 @@ export async function logoutAction() {
 }
 
 export async function resendConfirmationAction(email: string): Promise<AuthState> {
+  const rl = await checkRateLimit("auth_resend", 3, 300000);
+  if (!rl.success) return { error: "Too many resend requests. Please wait 5 minutes." };
   if (!email) return { error: "Email required." };
   const origin = await siteOrigin();
   const supabase = await createSupabaseServer();
@@ -142,6 +144,8 @@ export async function resetPasswordAction(
   _prev: any,
   formData: FormData,
 ): Promise<{ success?: boolean; error?: string }> {
+  const rl = await checkRateLimit("auth_reset", 5, 60000);
+  if (!rl.success) return { error: "Too many reset attempts. Please wait a minute." };
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 

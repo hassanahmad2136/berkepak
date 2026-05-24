@@ -15,7 +15,7 @@ if (typeof global !== "undefined") {
       const now = Date.now();
       for (const [key, record] of cache.entries()) {
         // Keep only timestamps within the last 1 minute
-        record.timestamps = record.timestamps.filter((t) => now - t < 60000);
+        record.timestamps = record.timestamps.filter((t) => now - t < 3600000);
         if (record.timestamps.length === 0) {
           cache.delete(key);
         }
