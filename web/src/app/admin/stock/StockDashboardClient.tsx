@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { 
-  updateProductColorStock, 
-  toggleProductVisibility, 
-  adminCreateProduct, 
-  adminDeleteProduct 
+import {
+  updateProductColorStock,
+  toggleProductVisibility,
+  adminCreateProduct,
+  adminDeleteProduct,
+  addProductColor,
+  removeProductColor,
 } from "@/lib/actions/admin";
 
 interface ProductItem {
@@ -64,6 +65,16 @@ export function StockDashboardClient({
   const [addFormDescription, setAddFormDescription] = useState("");
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Add color states
+  const [showAddColorModal, setShowAddColorModal] = useState<string | null>(null);
+  const [addColorName, setAddColorName] = useState("");
+  const [addColorStock, setAddColorStock] = useState("10");
+  const [isSubmittingColor, setIsSubmittingColor] = useState(false);
+  const [addColorError, setAddColorError] = useState<string | null>(null);
+
+  // Remove color states
+  const [removingColorId, setRemovingColorId] = useState<string | null>(null);
 
   // Sync state changes on escape key
   useEffect(() => {
@@ -231,6 +242,49 @@ export function StockDashboardClient({
     }
   };
 
+  const handleAddColor = async (catalogId: string) => {
+    const name = addColorName.trim();
+    const stock = parseInt(addColorStock);
+    if (!name) { setAddColorError("Color name is required."); return; }
+    if (isNaN(stock) || stock < 0) { setAddColorError("Stock must be 0 or greater."); return; }
+
+    setIsSubmittingColor(true);
+    setAddColorError(null);
+
+    try {
+      const res = await addProductColor(catalogId, name, stock);
+      if (res.ok) {
+        setAddColorName("");
+        setAddColorStock("10");
+        setShowAddColorModal(null);
+        window.location.reload();
+      } else {
+        setAddColorError((res as any).error || "Failed to add color.");
+      }
+    } catch (err: any) {
+      setAddColorError(err.message || "Unexpected error.");
+    } finally {
+      setIsSubmittingColor(false);
+    }
+  };
+
+  const handleRemoveColor = async (colorId: string) => {
+    if (!confirm("Remove this color variant? This cannot be undone.")) return;
+    setRemovingColorId(colorId);
+    try {
+      const res = await removeProductColor(colorId);
+      if (res.ok) {
+        setColors((prev) => prev.filter((c) => c.id !== colorId));
+      } else {
+        alert((res as any).error || "Failed to remove color.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Unexpected error.");
+    } finally {
+      setRemovingColorId(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header and Control Panel */}
@@ -325,6 +379,22 @@ export function StockDashboardClient({
                       Total Colors: {productColors.length}
                     </div>
 
+                    {/* Add Color button */}
+                    <button
+                      onClick={() => {
+                        setShowAddColorModal(p.id);
+                        setAddColorName("");
+                        setAddColorStock("10");
+                        setAddColorError(null);
+                      }}
+                      className="p-1.5 text-stone-400 hover:text-emerald-700 rounded-md hover:bg-stone-100 transition-colors cursor-pointer active:scale-95"
+                      title="Add Color Variant"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+
                     {/* Delete button */}
                     <button
                       onClick={() => setShowDeleteConfirm(p.id)}
@@ -342,18 +412,23 @@ export function StockDashboardClient({
                 {/* Colors Grid for Product */}
                 <div className="p-6">
                   {productColors.length === 0 ? (
-                    <p className="text-xs text-muted py-2 flex items-center gap-1.5">
-                      <svg className="w-4 h-4 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>
-                        No colors configured. Add colors in{" "}
-                        <Link href="/admin/pricing" className="underline font-semibold hover:text-ink transition-colors">
-                          Pricing panel
-                        </Link>{" "}
-                        first.
-                      </span>
-                    </p>
+                    <div className="py-4 text-center">
+                      <p className="text-xs text-muted mb-3">No color variants yet.</p>
+                      <button
+                        onClick={() => {
+                          setShowAddColorModal(p.id);
+                          setAddColorName("");
+                          setAddColorStock("10");
+                          setAddColorError(null);
+                        }}
+                        className="px-4 py-2 bg-ink hover:bg-stone-900 text-paper rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 mx-auto"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add First Color
+                      </button>
+                    </div>
                   ) : (
                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                       {productColors.map((c) => {
@@ -485,6 +560,15 @@ export function StockDashboardClient({
                                   {isError}
                                 </p>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveColor(c.id)}
+                                disabled={removingColorId === c.id}
+                                className="mt-2 text-[10px] text-stone-400 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                                title="Remove this color"
+                              >
+                                {removingColorId === c.id ? "Removing..." : "Remove color"}
+                              </button>
                             </div>
                           </div>
                         );
@@ -541,6 +625,75 @@ export function StockDashboardClient({
               >
                 {isDeletingProductId !== null ? "Deleting..." : "Permanently Delete"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Color Modal */}
+      {showAddColorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-stone rounded-xl shadow-lg max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-stone flex justify-between items-center bg-stone-50/50">
+              <h4 className="font-semibold text-ink text-base">Add Color Variant</h4>
+              <button
+                onClick={() => setShowAddColorModal(null)}
+                className="text-stone-400 hover:text-ink transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {addColorError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded-lg font-medium">
+                  ⚠️ {addColorError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink">Color Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Navy Blue"
+                  value={addColorName}
+                  onChange={(e) => setAddColorName(e.target.value)}
+                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink">Initial Stock</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="10"
+                  value={addColorStock}
+                  onChange={(e) => setAddColorStock(e.target.value)}
+                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddColorModal(null)}
+                  disabled={isSubmittingColor}
+                  className="px-4 py-2 text-xs font-medium text-ink bg-white border border-stone rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddColor(showAddColorModal)}
+                  disabled={isSubmittingColor}
+                  className="px-4 py-2 text-xs font-bold text-paper bg-ink hover:bg-stone-900 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  {isSubmittingColor ? "Adding..." : "Add Color"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

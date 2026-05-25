@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { PlaceOrderSchema } from "@/lib/validation";
 import { getProductByIdAsync } from "@/lib/products";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
@@ -37,17 +38,23 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     return { ok: false, error: rateLimit.error ?? "Too many requests." };
   }
 
+  const parsed = PlaceOrderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+  const validInput = parsed.data;
+
   const supabase = await createSupabaseServer();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Please sign in to place an order." };
 
-  if (input.lines.length === 0) return { ok: false, error: "Cart is empty." };
-  if (input.paymentMethod === "cod" && !input.otpVerified) {
+  if (validInput.lines.length === 0) return { ok: false, error: "Cart is empty." };
+  if (validInput.paymentMethod === "cod" && !validInput.otpVerified) {
     return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
   }
 
   // Recompute totals server-side so the client cannot tamper with prices.
-  const items = await Promise.all(input.lines.map(async (line) => {
+  const items = await Promise.all(validInput.lines.map(async (line) => {
     const product = await getProductByIdAsync(line.productId);
     if (!product) throw new Error(`Unknown product ${line.productId}`);
 
@@ -58,7 +65,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         : 0;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
-    const color = "White"; // CartLine has no color field; default to White
+    const color = line.color || "White";
 
     return {
       product_id: product.id,
@@ -86,15 +93,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const { error: orderErr } = await supabase.from("orders").insert({
     id: orderId,
     user_id: userData.user.id,
-    status: input.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
-    payment_method: input.paymentMethod,
+    status: validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
+    payment_method: validInput.paymentMethod,
     payment_status:
-      input.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
+      validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
     subtotal,
     shipping,
     total,
-    shipping_address: input.address,
-    otp_verified: input.otpVerified,
+    shipping_address: validInput.address,
+    otp_verified: validInput.otpVerified,
   });
   if (orderErr) return { ok: false, error: orderErr.message };
 
@@ -120,14 +127,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   // -----------------------------------------------------------------------
   const adminClient = createSupabaseAdmin();
   for (const it of items) {
-    const { error: decErr } = await adminClient.rpc("decrement_product_stock", {
+    const { data: stockOk, error: decErr } = await adminClient.rpc("decrement_product_stock", {
       p_product_id: it.product_id,
       p_color_name: it.color,
       p_quantity: it.quantity,
     });
     if (decErr) {
-      console.error(`Stock decrement failed for product ${it.product_id}:`, decErr.message);
-      // Non-fatal: order is saved, stock reconciliation can be done manually
+      console.error(`Stock decrement error for product ${it.product_id}:`, decErr.message);
+    } else if (!stockOk) {
+      console.warn(`Insufficient stock for product ${it.product_id} color ${it.color} — order saved, stock not decremented`);
     }
   }
 

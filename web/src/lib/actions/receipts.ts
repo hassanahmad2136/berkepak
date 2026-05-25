@@ -18,6 +18,10 @@ export async function uploadReceipt(formData: FormData): Promise<UploadReceiptRe
   if (file.size > 10 * 1024 * 1024) {
     return { ok: false, error: "File must be under 10 MB." };
   }
+  const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
+  if (!ALLOWED_MIME.includes(file.type)) {
+    return { ok: false, error: "Only JPEG, PNG, WebP, HEIC, or PDF files are accepted." };
+  }
 
   const supabase = await createSupabaseServer();
   const { data: userData } = await supabase.auth.getUser();

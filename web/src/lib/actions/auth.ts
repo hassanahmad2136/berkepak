@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/utils/redirect";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { SignupSchema, LoginSchema } from "@/lib/validation";
 
 export type AuthState =
   | undefined
@@ -29,24 +32,20 @@ export async function signupAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const fullName = String(formData.get("fullName") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const phoneRaw = String(formData.get("phone") ?? "").trim();
-  const phone = normalizePhone(phoneRaw);
-  const password = String(formData.get("password") ?? "");
+  const rl = await checkRateLimit("auth_signup", 5, 60000);
+  if (!rl.success) return { error: "Too many signup attempts. Please wait a minute." };
 
-  if (!fullName) return { error: "Please enter your full name." };
-  if (!email) return { error: "Please enter your email." };
-  if (!phone) return { error: "Mobile number is required." };
-  if (!PK_MOBILE_RE.test(phone)) {
-    return {
-      error:
-        "Enter a valid Pakistani mobile number (e.g. 03001234567 or +923001234567).",
-    };
+  const raw = {
+    fullName: String(formData.get("fullName") ?? "").trim(),
+    email: String(formData.get("email") ?? "").trim(),
+    phone: normalizePhone(String(formData.get("phone") ?? "").trim()),
+    password: String(formData.get("password") ?? ""),
+  };
+  const parsed = SignupSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
   }
-  if (password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
-  }
+  const { fullName, email, phone, password } = parsed.data;
 
   const origin = await siteOrigin();
   const supabase = await createSupabaseServer();
@@ -75,8 +74,18 @@ export async function loginAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const password = String(formData.get("password") ?? "");
+  const rl = await checkRateLimit("auth_login", 10, 60000);
+  if (!rl.success) return { error: "Too many login attempts. Please wait a minute." };
+
+  const raw = {
+    email: String(formData.get("email") ?? "").trim(),
+    password: String(formData.get("password") ?? ""),
+  };
+  const parsed = LoginSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: "Invalid email or password format." };
+  }
+  const { email, password } = parsed.data;
   const next = String(formData.get("next") ?? "/account");
 
   const supabase = await createSupabaseServer();
@@ -84,7 +93,7 @@ export async function loginAction(
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");
-  redirect(next);
+  redirect(safeRedirectPath(next));
 }
 
 export async function logoutAction() {
@@ -95,6 +104,8 @@ export async function logoutAction() {
 }
 
 export async function resendConfirmationAction(email: string): Promise<AuthState> {
+  const rl = await checkRateLimit("auth_resend", 3, 300000);
+  if (!rl.success) return { error: "Too many resend requests. Please wait 5 minutes." };
   if (!email) return { error: "Email required." };
   const origin = await siteOrigin();
   const supabase = await createSupabaseServer();
@@ -111,6 +122,9 @@ export async function forgotPasswordAction(
   _prev: any,
   formData: FormData,
 ): Promise<{ success?: boolean; error?: string }> {
+  const rl = await checkRateLimit("auth_forgot", 3, 300000);
+  if (!rl.success) return { error: "Too many password reset requests. Please wait 5 minutes." };
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) return { error: "Please enter your email address." };
 
@@ -131,6 +145,8 @@ export async function resetPasswordAction(
   _prev: any,
   formData: FormData,
 ): Promise<{ success?: boolean; error?: string }> {
+  const rl = await checkRateLimit("auth_reset", 5, 60000);
+  if (!rl.success) return { error: "Too many reset attempts. Please wait a minute." };
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 

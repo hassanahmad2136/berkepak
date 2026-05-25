@@ -139,6 +139,13 @@ export async function updateSingleProductPrice(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
+  if (!Number.isFinite(newPrice) || newPrice < 100) {
+    return { ok: false, error: "Price must be at least 100 PKR." };
+  }
+  if (newPrice > 1_000_000) {
+    return { ok: false, error: "Price cannot exceed 1,000,000 PKR." };
+  }
+
   const admin = createSupabaseAdmin();
   const { error } = await admin
     .from("product_catalog")
@@ -177,7 +184,7 @@ export async function bulkUpdatePrices(
     let adjustment = type === "flat" ? amount : p.price * (amount / 100);
     let newPrice = direction === "increase" ? p.price + adjustment : p.price - adjustment;
     // Round to nearest 10 PKR, clamp to 0
-    const roundedPrice = Math.max(0, Math.round(newPrice / 10) * 10);
+    const roundedPrice = Math.min(1_000_000, Math.max(100, Math.round(newPrice / 10) * 10));
 
     const { error } = await admin
       .from("product_catalog")
@@ -366,6 +373,12 @@ export async function adminCreateProduct(
 
   if (error) return { ok: false, error: error.message };
 
+  // Seed default White and Black color variants
+  await admin.from("product_colors").insert([
+    { catalog_id: data.id, color_name: "White", stock: 10, image_url: null },
+    { catalog_id: data.id, color_name: "Black", stock: 10, image_url: null },
+  ]);
+
   revalidatePath("/admin/stock");
   revalidatePath("/admin/pricing");
   revalidatePath("/shop");
@@ -403,9 +416,78 @@ export async function adminDeleteProduct(productId: string): Promise<AdminResult
   return { ok: true };
 }
 
+export async function addProductColor(
+  catalogId: string,
+  colorName: string,
+  initialStock: number,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const normalized = colorName.trim();
+  if (!normalized) return { ok: false, error: "Color name is required." };
+  if (initialStock < 0) return { ok: false, error: "Stock cannot be negative." };
+
+  const admin = createSupabaseAdmin();
+
+  const { data: existing } = await admin
+    .from("product_colors")
+    .select("id")
+    .eq("catalog_id", catalogId)
+    .eq("color_name", normalized)
+    .maybeSingle();
+
+  if (existing) return { ok: false, error: `Color "${normalized}" already exists for this product.` };
+
+  const { error } = await admin.from("product_colors").insert({
+    catalog_id: catalogId,
+    color_name: normalized,
+    stock: initialStock,
+    image_url: null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange(
+    "Add Product Color",
+    `Catalog ID: ${catalogId}\nColor: ${normalized}\nInitial Stock: ${initialStock}`,
+  );
+
+  return { ok: true };
+}
+
+export async function removeProductColor(colorId: string): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  const { error } = await admin.from("product_colors").delete().eq("id", colorId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange("Remove Product Color", `Color ID: ${colorId} deleted.`);
+
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 async function notifyAdminsOfChange(actionName: string, details: string) {
   const smtpHost = process.env.SMTP_HOST;
@@ -426,17 +508,17 @@ async function notifyAdminsOfChange(actionName: string, details: string) {
       await transporter.sendMail({
         from: `"BerkePak Fabrics" <${smtpUser}>`,
         to: "admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com",
-        subject: `⚠️ Admin Action Alert: ${actionName}`,
+        subject: `Admin Action Alert: ${escapeHtml(actionName)}`,
         html: `
           <div style="font-family:sans-serif;padding:20px;background:#fafaf9;color:#1c1917;">
             <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;border:1px solid #e7e5e4;">
               <h2 style="font-size:20px;font-weight:700;color:#b91c1c;margin-bottom:20px;border-bottom:2px solid #f5f5f4;padding-bottom:10px;">
                 Admin Action Logged
               </h2>
-              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${actionName}</p>
+              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${escapeHtml(actionName)}</p>
               <p style="font-size:14px;margin-bottom:12px;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
               <div style="background:#f5f5f4;padding:15px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;margin-top:15px;border-left:4px solid #b91c1c;">
-                ${details}
+                ${escapeHtml(details)}
               </div>
             </div>
           </div>
