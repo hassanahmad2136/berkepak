@@ -373,6 +373,12 @@ export async function adminCreateProduct(
 
   if (error) return { ok: false, error: error.message };
 
+  // Seed default White and Black color variants
+  await admin.from("product_colors").insert([
+    { catalog_id: data.id, color_name: "White", stock: 10, image_url: null },
+    { catalog_id: data.id, color_name: "Black", stock: 10, image_url: null },
+  ]);
+
   revalidatePath("/admin/stock");
   revalidatePath("/admin/pricing");
   revalidatePath("/shop");
@@ -406,6 +412,66 @@ export async function adminDeleteProduct(productId: string): Promise<AdminResult
     "Delete Product",
     `Product ID: ${productId} permanently deleted from product_catalog (colors cascade-deleted).`,
   );
+
+  return { ok: true };
+}
+
+export async function addProductColor(
+  catalogId: string,
+  colorName: string,
+  initialStock: number,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const normalized = colorName.trim();
+  if (!normalized) return { ok: false, error: "Color name is required." };
+  if (initialStock < 0) return { ok: false, error: "Stock cannot be negative." };
+
+  const admin = createSupabaseAdmin();
+
+  const { data: existing } = await admin
+    .from("product_colors")
+    .select("id")
+    .eq("catalog_id", catalogId)
+    .eq("color_name", normalized)
+    .maybeSingle();
+
+  if (existing) return { ok: false, error: `Color "${normalized}" already exists for this product.` };
+
+  const { error } = await admin.from("product_colors").insert({
+    catalog_id: catalogId,
+    color_name: normalized,
+    stock: initialStock,
+    image_url: null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange(
+    "Add Product Color",
+    `Catalog ID: ${catalogId}\nColor: ${normalized}\nInitial Stock: ${initialStock}`,
+  );
+
+  return { ok: true };
+}
+
+export async function removeProductColor(colorId: string): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  const { error } = await admin.from("product_colors").delete().eq("id", colorId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
+
+  await notifyAdminsOfChange("Remove Product Color", `Color ID: ${colorId} deleted.`);
 
   return { ok: true };
 }
