@@ -27,11 +27,13 @@ alter table public.orders
 alter table public.promotions enable row level security;
 
 -- Public: anyone can read active promotions (needed for homepage popup server fetch)
+drop policy if exists "promotions_public_read" on public.promotions;
 create policy "promotions_public_read"
   on public.promotions for select
   using (is_active = true);
 
 -- Admin: authenticated users can do everything (RLS for write is enforced via requireAdmin() in server actions)
+drop policy if exists "promotions_admin_all" on public.promotions;
 create policy "promotions_admin_all"
   on public.promotions for all
   using (auth.role() = 'authenticated')
@@ -49,14 +51,17 @@ values (
 on conflict (id) do nothing;
 
 -- Storage policies for product-images
+drop policy if exists "product_images_public_read" on storage.objects;
 create policy "product_images_public_read"
   on storage.objects for select
   using (bucket_id = 'product-images');
 
+drop policy if exists "product_images_auth_upload" on storage.objects;
 create policy "product_images_auth_upload"
   on storage.objects for insert
   with check (bucket_id = 'product-images' and auth.role() = 'authenticated');
 
+drop policy if exists "product_images_auth_delete" on storage.objects;
 create policy "product_images_auth_delete"
   on storage.objects for delete
   using (bucket_id = 'product-images' and auth.role() = 'authenticated');
