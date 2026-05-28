@@ -36,6 +36,8 @@ export interface CartLine {
   quantity: number;
   stitching: Stitching;
   color: string;
+  /** Discounted unit price stored at add-to-cart time. Overrides live product price in lineSubtotal. */
+  unitPriceOverride?: number;
 }
 
 export interface Address {
