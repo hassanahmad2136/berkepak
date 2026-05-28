@@ -5,6 +5,7 @@ import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PlaceOrderSchema } from "@/lib/validation";
 import { getProductByIdAsync } from "@/lib/products";
+import { sendOrderConfirmationEmail } from "@/lib/actions/email-actions";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
   type Address,
@@ -172,5 +173,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   }
 
   revalidatePath("/account/orders");
+
+  // Non-fatal: send confirmation email (order already committed)
+  if (userData.user.email) {
+    sendOrderConfirmationEmail(orderId, userData.user.email).catch((err) =>
+      console.error("Order confirmation email failed:", err),
+    );
+  }
+
   return { ok: true, orderId };
 }
