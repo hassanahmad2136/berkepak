@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { isCurrentUserAdmin } from "@/lib/admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -107,6 +108,11 @@ export async function validateCoupon(
   code: string,
   subtotal: number,
 ): Promise<ValidateCouponResult> {
+  const rateLimit = await checkRateLimit("coupon_validate", 10);
+  if (!rateLimit.success) {
+    return { ok: false, error: rateLimit.error ?? "Too many requests." };
+  }
+
   if (!code.trim()) return { ok: false, error: "Enter a promo code." };
 
   const admin = createSupabaseAdmin();
