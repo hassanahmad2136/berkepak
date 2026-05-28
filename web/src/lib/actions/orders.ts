@@ -113,7 +113,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     }
   }
 
-  const total = subtotal + shipping - discountAmount;
+  const total = Math.max(0, subtotal + shipping - discountAmount);
 
   // -----------------------------------------------------------------------
   // Step B: Save to Supabase

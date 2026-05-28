@@ -88,7 +88,7 @@ export function CheckoutFlow({
     setOtpVerified(false);
   };
 
-  const displayTotal = couponApplied ? total - couponApplied.discountAmount : total;
+  const displayTotal = couponApplied ? Math.max(0, total - couponApplied.discountAmount) : total;
 
   if (placedOrderId) {
     return <Confirmation orderId={placedOrderId} method={payment} total={displayTotal} />;
