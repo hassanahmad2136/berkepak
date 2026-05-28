@@ -180,7 +180,7 @@ export function ProductInteractiveClient({
         </div>
 
         {/* Add to Cart Actions */}
-        <AddToCart product={product} color={selectedColor} stock={currentStock} />
+        <AddToCart product={product} color={selectedColor} stock={currentStock} discount={discount} />
 
         <dl className="mt-10 grid grid-cols-2 gap-y-3 gap-x-6 border-t border-stone pt-6 text-sm">
           <dt className="text-muted">Composition</dt>
