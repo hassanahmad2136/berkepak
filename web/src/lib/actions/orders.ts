@@ -175,11 +175,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   revalidatePath("/account/orders");
 
-  // Non-fatal: send confirmation email (order already committed)
-  if (userData.user.email) {
-    sendOrderConfirmationEmail(orderId, userData.user.email).catch((err) =>
-      console.error("Order confirmation email failed:", err),
-    );
+  // Send confirmation immediately for COD. Bank transfer waits for admin receipt approval.
+  if (userData.user.email && validInput.paymentMethod !== "bank_transfer") {
+    try {
+      await sendOrderConfirmationEmail(orderId, userData.user.email);
+    } catch (err) {
+      console.error("Order confirmation email failed:", err);
+    }
   }
 
   return { ok: true, orderId };
