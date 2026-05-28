@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -27,7 +28,7 @@ export type PlaceOrderResult =
   | { ok: false; error: string };
 
 function newOrderId(): string {
-  return "BPK-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+  return "BPK-" + randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
