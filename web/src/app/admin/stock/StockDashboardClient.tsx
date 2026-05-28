@@ -229,19 +229,20 @@ export function StockDashboardClient({
         const { error: uploadErr } = await supabase.storage
           .from("product-images")
           .upload(path, addFormImageFile, { cacheControl: "3600", upsert: false });
-        setIsUploadingImage(false);
         if (uploadErr) {
+          setIsUploadingImage(false);
           setAddError(`Image upload failed: ${uploadErr.message}`);
           setIsSubmittingAdd(false);
           return;
         }
+        setIsUploadingImage(false);
         const { data: { publicUrl } } = supabase.storage
           .from("product-images")
           .getPublicUrl(path);
         imageUrl = publicUrl;
       }
 
-      const threadCountNum = addFormThreadCount ? parseInt(addFormThreadCount) : null;
+      const threadCountNum = addFormThreadCount ? parseInt(addFormThreadCount, 10) : null;
 
       const res = await adminCreateProduct(
         addFormName,
@@ -252,7 +253,7 @@ export function StockDashboardClient({
         addFormDescription,
         imageUrl,
         addFormWeaveType || null,
-        isNaN(threadCountNum as number) ? null : threadCountNum,
+        threadCountNum !== null && isNaN(threadCountNum) ? null : threadCountNum,
       );
 
       if (res.ok) {
