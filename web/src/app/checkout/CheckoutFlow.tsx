@@ -63,6 +63,7 @@ export function CheckoutFlow({
   } | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponPending, startCouponTransition] = useTransition();
+  const [confirmedTotal, setConfirmedTotal] = useState(0);
 
   useEffect(() => {
     if (lines.length === 0) return;
@@ -91,7 +92,7 @@ export function CheckoutFlow({
   const displayTotal = couponApplied ? Math.max(0, total - couponApplied.discountAmount) : total;
 
   if (placedOrderId) {
-    return <Confirmation orderId={placedOrderId} method={payment} total={displayTotal} />;
+    return <Confirmation orderId={placedOrderId} method={payment} total={confirmedTotal} />;
   }
 
   if (lines.length === 0) {
@@ -168,6 +169,7 @@ export function CheckoutFlow({
         promoId: couponApplied?.promoId,
       });
       if (res.ok) {
+        setConfirmedTotal(displayTotal);
         setPlacedOrderId(res.orderId);
         clear();
       } else {
