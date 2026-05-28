@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlugAsync, getProducts } from "@/lib/products";
+import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import { formatPKR } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
 import { createClient } from "@supabase/supabase-js";
@@ -69,10 +70,15 @@ export default async function ProductPage(props: {
     console.warn("Supabase fetch failed on product page, using defaults:", err);
   }
 
-  const allProducts = await getProducts();
+  const [allProducts, campaigns] = await Promise.all([getProducts(), getActiveCampaigns()]);
   const related = allProducts
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 4);
+
+  const activeCampaign = getCampaignForProduct(product.id, product.category, campaigns);
+  const discount = activeCampaign
+    ? computeDiscount(product.pricePerSuit, product.pricePerMeter, activeCampaign)
+    : undefined;
 
   return (
     <article className="mx-auto max-w-[1440px] px-4 sm:px-8 pt-6 pb-24">
@@ -84,15 +90,17 @@ export default async function ProductPage(props: {
         <span className="capitalize">{product.category}</span>
       </nav>
 
-      <ProductInteractiveClient product={product} colors={dbColors} />
+      <ProductInteractiveClient product={product} colors={dbColors} discount={discount} />
 
       {related.length > 0 && (
         <section className="mt-24">
           <p className="eyebrow text-muted">You may also like</p>
           <div className="mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
+            {related.map((p) => {
+              const rc = getCampaignForProduct(p.id, p.category, campaigns);
+              const rd = rc ? computeDiscount(p.pricePerSuit, p.pricePerMeter, rc) : undefined;
+              return <ProductCard key={p.id} product={p} discount={rd} />;
+            })}
           </div>
         </section>
       )}

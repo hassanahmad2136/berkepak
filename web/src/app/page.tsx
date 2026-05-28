@@ -2,16 +2,18 @@ import Link from "next/link";
 import Image from "next/image"; // still used in fabricOfMonth + category grid
 import { ProductCard } from "@/components/ProductCard";
 import { getNewArrivalsAsync, getFeaturedAsync, getProducts } from "@/lib/products";
+import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import { HeroSlideshow } from "@/components/HeroSlideshow";
 import { PromotionPopup } from "@/components/PromotionPopup";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 
 export default async function HomePage() {
   const now = new Date().toISOString();
-  const [newArrivals, featured, allProducts, bannersRes] = await Promise.all([
+  const [newArrivals, featured, allProducts, campaigns, bannersRes] = await Promise.all([
     getNewArrivalsAsync(),
     getFeaturedAsync(),
     getProducts(),
+    getActiveCampaigns(),
     createSupabaseAdmin()
       .from("promotions")
       .select("id, title, body")
