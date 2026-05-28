@@ -347,6 +347,9 @@ export async function adminCreateProduct(
   pricePerSuit: number,
   composition: string,
   description: string,
+  imageUrl?: string | null,
+  weaveType?: string | null,
+  threadCount?: number | null,
 ): Promise<{ ok: boolean; productId?: string; error?: string }> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -367,6 +370,9 @@ export async function adminCreateProduct(
       is_active: true,
       is_new: false,
       is_featured: false,
+      images: imageUrl ? [imageUrl] : [],
+      weave_type: weaveType ?? null,
+      thread_count: threadCount ?? null,
     })
     .select("id")
     .single();
