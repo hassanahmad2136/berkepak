@@ -349,6 +349,7 @@ export function CheckoutFlow({
                   <input
                     type="radio"
                     name="payment"
+                    value="card"
                     disabled
                     className="mt-1"
                   />
