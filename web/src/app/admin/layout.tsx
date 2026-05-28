@@ -11,6 +11,7 @@ const NAV = [
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/pricing", label: "Pricing" },
   { href: "/admin/stock", label: "Inventory" },
+  { href: "/admin/promotions", label: "Promotions" },
 ];
 
 export default async function AdminLayout({
