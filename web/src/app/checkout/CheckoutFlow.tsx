@@ -514,13 +514,15 @@ export function CheckoutFlow({
                   className="flex gap-3 py-3"
                 >
                   <div className="relative h-16 w-12 shrink-0 bg-mist overflow-hidden">
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                    />
+                    {product.images[0] && (
+                      <Image
+                        src={product.images[0]}
+                        alt={product.name}
+                        fill
+                        sizes="48px"
+                        className="object-cover"
+                      />
+                    )}
                   </div>
                   <div className="flex-1 text-sm min-w-0">
                     <p className="truncate font-medium">{product.name}</p>

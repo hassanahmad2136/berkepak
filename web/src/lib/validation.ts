@@ -18,12 +18,14 @@ export const LoginSchema = z.object({
 });
 
 export const AddressSchema = z.object({
-  name: z.string().min(2).max(100),
+  fullName: z.string().min(2).max(100),
   phone: z.string().min(7).max(20),
   line1: z.string().min(5).max(200),
   line2: z.string().max(200).optional(),
   city: z.string().min(2).max(100),
   province: z.string().min(2).max(100),
+  postalCode: z.string().max(20).optional(),
+  country: z.string().max(50).optional(),
 });
 
 export const CartLineSchema = z.object({
