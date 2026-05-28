@@ -169,7 +169,7 @@ export function CheckoutFlow({
         promoId: couponApplied?.promoId,
       });
       if (res.ok) {
-        setConfirmedTotal(displayTotal);
+        setConfirmedTotal(res.total);
         setPlacedOrderId(res.orderId);
         clear();
       } else {

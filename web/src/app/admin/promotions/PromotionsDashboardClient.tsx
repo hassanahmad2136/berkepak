@@ -80,9 +80,10 @@ export function PromotionsDashboardClient({ promotions: initial, fetchError }: P
   const handleDelete = async (id: string) => {
     if (!confirm("Permanently delete this promotion?")) return;
     setDeletingId(id);
-    await deletePromotion(id);
-    setPromos((p) => p.filter((r) => r.id !== id));
+    const res = await deletePromotion(id);
     setDeletingId(null);
+    if (!res.ok) { setFormError(res.error); return; }
+    setPromos((p) => p.filter((r) => r.id !== id));
   };
 
   return (

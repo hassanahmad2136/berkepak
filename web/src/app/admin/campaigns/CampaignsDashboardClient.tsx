@@ -192,9 +192,10 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
   const handleDelete = async (id: string) => {
     if (!confirm("Permanently delete this campaign?")) return;
     setDeletingId(id);
-    await deleteCampaign(id);
-    setCampaigns((cs) => cs.filter((c) => c.id !== id));
+    const res = await deleteCampaign(id);
     setDeletingId(null);
+    if (!res.ok) { setFormError(res.error); return; }
+    setCampaigns((cs) => cs.filter((c) => c.id !== id));
   };
 
   return (

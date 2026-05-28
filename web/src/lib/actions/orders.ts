@@ -25,7 +25,7 @@ export type PlaceOrderInput = {
 };
 
 export type PlaceOrderResult =
-  | { ok: true; orderId: string }
+  | { ok: true; orderId: string; total: number }
   | { ok: false; error: string };
 
 function newOrderId(): string {
@@ -204,5 +204,5 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     }
   }
 
-  return { ok: true, orderId };
+  return { ok: true, orderId, total };
 }
