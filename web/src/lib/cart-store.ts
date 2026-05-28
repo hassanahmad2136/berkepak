@@ -24,6 +24,7 @@ interface CartState {
     quantity?: number,
     stitching?: Stitching,
     color?: string,
+    unitPriceOverride?: number,
   ) => void;
   setQuantity: (
     productId: string,
@@ -63,6 +64,7 @@ export const useCart = create<CartState>()(
         quantity = 1,
         stitching = "none",
         color = "White",
+        unitPriceOverride,
       ) =>
         set((s) => {
           const key = lineKey(productId, unit, stitching, color);
@@ -82,7 +84,7 @@ export const useCart = create<CartState>()(
           return {
             lines: [
               ...s.lines,
-              { productId, productSlug, unit, quantity, stitching, color },
+              { productId, productSlug, unit, quantity, stitching, color, unitPriceOverride },
             ],
             isOpen: true,
           };
@@ -138,8 +140,10 @@ export function lineSubtotal(line: CartLine, resolvedProduct?: Product): number 
     getProductById(line.productId) ??
     (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
   if (!product) return 0;
+  // Prefer discounted price stored at add-to-cart time; fall back to live product price.
   const unitPrice =
-    line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
+    line.unitPriceOverride ??
+    (line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit);
   const addon =
     line.stitching === "bespoke" && line.unit === "suit"
       ? BESPOKE_STITCHING_ADDON_PKR
