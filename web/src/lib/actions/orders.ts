@@ -18,6 +18,7 @@ export type PlaceOrderInput = {
   address: Address;
   paymentMethod: PaymentMethod;
   otpVerified: boolean;
+  promoId?: string;
 };
 
 export type PlaceOrderResult =
@@ -83,7 +84,36 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
   const shipping = subtotal >= 10_000 ? 0 : 350;
-  const total = subtotal + shipping;
+
+  // Re-validate promo server-side (never trust client discount amount)
+  let discountAmount = 0;
+  let validatedPromoId: string | null = null;
+  if (validInput.promoId) {
+    const adminForPromo = createSupabaseAdmin();
+    const { data: promo } = await adminForPromo
+      .from("promotions")
+      .select("id, discount_type, discount_value, min_order_amount, is_active, starts_at, ends_at")
+      .eq("id", validInput.promoId)
+      .eq("type", "coupon")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (promo) {
+      const now = new Date();
+      const validDates =
+        (!promo.starts_at || new Date(promo.starts_at) <= now) &&
+        (!promo.ends_at || new Date(promo.ends_at) >= now);
+      const validMin = subtotal >= Number(promo.min_order_amount ?? 0);
+      if (validDates && validMin) {
+        discountAmount =
+          promo.discount_type === "pct"
+            ? Math.floor(subtotal * (Number(promo.discount_value) / 100))
+            : Math.min(Number(promo.discount_value), subtotal);
+        validatedPromoId = promo.id;
+      }
+    }
+  }
+
+  const total = subtotal + shipping - discountAmount;
 
   // -----------------------------------------------------------------------
   // Step B: Save to Supabase
@@ -99,6 +129,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
     subtotal,
     shipping,
+    discount_amount: discountAmount,
+    promo_id: validatedPromoId,
     total,
     shipping_address: validInput.address,
     otp_verified: validInput.otpVerified,

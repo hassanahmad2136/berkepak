@@ -39,6 +39,7 @@ export const PlaceOrderSchema = z.object({
   address: AddressSchema,
   paymentMethod: z.enum(["cod", "bank_transfer"]),
   otpVerified: z.boolean(),
+  promoId: z.string().uuid().optional(),
 });
 
 export const PriceSchema = z.number().finite().min(100).max(1_000_000);
