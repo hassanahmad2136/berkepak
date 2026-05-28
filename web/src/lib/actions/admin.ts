@@ -5,6 +5,7 @@ import { createSupabaseAdmin, createSupabaseServer } from "@/lib/supabase/server
 import { isCurrentUserAdmin } from "@/lib/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import nodemailer from "nodemailer";
+import { sendOrderConfirmationEmail } from "@/lib/actions/email-actions";
 
 export type AdminResult = { ok: true } | { ok: false; error: string };
 
@@ -45,6 +46,24 @@ export async function approveReceipt(receiptId: string): Promise<AdminResult> {
 
   revalidatePath("/admin/receipts");
   revalidatePath("/admin/orders");
+
+  // Non-fatal: send order confirmation email to customer now that payment is confirmed.
+  try {
+    const { data: orderData } = await admin
+      .from("orders")
+      .select("user_id")
+      .eq("id", receipt.order_id)
+      .single();
+    if (orderData?.user_id) {
+      const { data: userData } = await admin.auth.admin.getUserById(orderData.user_id);
+      if (userData?.user?.email) {
+        await sendOrderConfirmationEmail(receipt.order_id, userData.user.email);
+      }
+    }
+  } catch (err) {
+    console.error("Receipt approval confirmation email failed:", err);
+  }
+
   return { ok: true };
 }
 
