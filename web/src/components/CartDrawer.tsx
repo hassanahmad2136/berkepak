@@ -3,13 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
+import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import { getProductByIdAsync } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
 import { useEffect, useState } from "react";
 import type { Product } from "@/lib/types";
 
 export function CartDrawer() {
-  const { isOpen, close, lines, setQuantity, remove } = useCart();
+  const { isOpen, close, lines, setQuantity, remove, updatePriceOverride } = useCart();
   const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
 
   useEffect(() => {
@@ -30,6 +31,37 @@ export function CartDrawer() {
       });
     });
   }, [lines]);
+
+  // Re-validate campaign discounts every time the cart opens.
+  // Clears stale unitPriceOverride when campaigns expire; updates when they change.
+  useEffect(() => {
+    if (!isOpen || lines.length === 0) return;
+    // Wait until products are loaded into productMap
+    const allLoaded = lines.every((l) => productMap.has(l.productId));
+    if (!allLoaded) return;
+
+    getActiveCampaigns().then((campaigns) => {
+      lines.forEach((line) => {
+        const product = productMap.get(line.productId);
+        if (!product) return;
+        const campaign = getCampaignForProduct(product.id, product.category, campaigns);
+        const discount = campaign
+          ? computeDiscount(product.pricePerSuit, product.pricePerMeter, campaign)
+          : null;
+        const freshPrice = discount?.discountedPricePerSuit;
+        // Only write if value changed to avoid unnecessary re-renders
+        if (freshPrice !== line.unitPriceOverride) {
+          updatePriceOverride(
+            line.productId,
+            line.unit,
+            line.stitching,
+            line.color || "White",
+            freshPrice,
+          );
+        }
+      });
+    });
+  }, [isOpen, productMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal = cartSubtotal(lines, productMap);
 
