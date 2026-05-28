@@ -282,6 +282,7 @@ export function PromotionsDashboardClient({ promotions: initial, fetchError }: P
                         type="number"
                         min="1"
                         max={formDiscountType === "pct" ? "100" : undefined}
+                        step="1"
                         placeholder={formDiscountType === "pct" ? "e.g. 15" : "e.g. 500"}
                         value={formDiscountValue}
                         onChange={(e) => setFormDiscountValue(e.target.value)}
@@ -297,6 +298,7 @@ export function PromotionsDashboardClient({ promotions: initial, fetchError }: P
                     <input
                       type="number"
                       min="0"
+                      step="1"
                       placeholder="e.g. 5000"
                       value={formMinOrder}
                       onChange={(e) => setFormMinOrder(e.target.value)}
