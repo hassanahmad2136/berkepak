@@ -40,6 +40,13 @@ interface CartState {
     color: string,
   ) => void;
   clear: () => void;
+  updatePriceOverride: (
+    productId: string,
+    unit: SaleUnit,
+    stitching: Stitching,
+    color: string,
+    price: number | undefined,
+  ) => void;
 }
 
 const lineKey = (
@@ -115,6 +122,17 @@ export const useCart = create<CartState>()(
           ),
         })),
       clear: () => set({ lines: [] }),
+      updatePriceOverride: (productId, unit, stitching, color, price) =>
+        set((s) => ({
+          lines: s.lines.map((l) =>
+            l.productId === productId &&
+            l.unit === unit &&
+            l.stitching === stitching &&
+            (l.color || "White") === color
+              ? { ...l, unitPriceOverride: price }
+              : l,
+          ),
+        })),
     }),
     {
       name: "berkepak-cart",
