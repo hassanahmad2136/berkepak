@@ -1,10 +1,13 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PlaceOrderSchema } from "@/lib/validation";
 import { getProductByIdAsync } from "@/lib/products";
+import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { sendOrderConfirmationEmail } from "@/lib/actions/email-actions";
 import {
   BESPOKE_STITCHING_ADDON_PKR,
   type Address,
@@ -18,14 +21,15 @@ export type PlaceOrderInput = {
   address: Address;
   paymentMethod: PaymentMethod;
   otpVerified: boolean;
+  promoId?: string;
 };
 
 export type PlaceOrderResult =
-  | { ok: true; orderId: string }
+  | { ok: true; orderId: string; total: number }
   | { ok: false; error: string };
 
 function newOrderId(): string {
-  return "BPK-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+  return "BPK-" + randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -53,16 +57,24 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
   }
 
+  // Fetch active campaigns once — used for per-line discount computation.
+  const campaigns = await getActiveCampaigns();
+
   // Recompute totals server-side so the client cannot tamper with prices.
   const items = await Promise.all(validInput.lines.map(async (line) => {
     const product = await getProductByIdAsync(line.productId);
     if (!product) throw new Error(`Unknown product ${line.productId}`);
 
-    const unitPrice = product.pricePerSuit;
+    const campaign = getCampaignForProduct(product.id, product.category, campaigns);
+    const campaignDisc = campaign
+      ? computeDiscount(product.pricePerSuit, product.pricePerMeter, campaign)
+      : null;
+    const unitPrice = campaignDisc?.discountedPricePerSuit ?? product.pricePerSuit;
     const stitchingAddon =
       line.stitching === "bespoke"
         ? BESPOKE_STITCHING_ADDON_PKR
         : 0;
+    const originalLineTotal = (product.pricePerSuit + stitchingAddon) * line.quantity;
     const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
 
     const color = line.color || "White";
@@ -77,13 +89,53 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       stitching: line.stitching,
       stitching_addon: stitchingAddon,
       line_total: lineTotal,
+      original_line_total: originalLineTotal,
       color,
     };
   }));
 
   const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
-  const shipping = subtotal >= 10_000 ? 0 : 350;
-  const total = subtotal + shipping;
+  const originalSubtotal = items.reduce((sum, it) => sum + it.original_line_total, 0);
+  // Shipping threshold based on original (pre-discount) subtotal.
+  const shipping = originalSubtotal >= 10_000 ? 0 : 350;
+
+  // Campaign discount = difference between original and discounted line totals.
+  const campaignDiscount = originalSubtotal - subtotal;
+
+  // Re-validate coupon server-side against originalSubtotal (never trust client).
+  let couponDiscount = 0;
+  let validatedPromoId: string | null = null;
+  if (validInput.promoId) {
+    const adminForPromo = createSupabaseAdmin();
+    const { data: promo } = await adminForPromo
+      .from("promotions")
+      .select("id, discount_type, discount_value, min_order_amount, is_active, starts_at, ends_at")
+      .eq("id", validInput.promoId)
+      .eq("type", "coupon")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (promo) {
+      const now = new Date();
+      const validDates =
+        (!promo.starts_at || new Date(promo.starts_at) <= now) &&
+        (!promo.ends_at || new Date(promo.ends_at) >= now);
+      const validMin = originalSubtotal >= Number(promo.min_order_amount ?? 0);
+      if (validDates && validMin) {
+        couponDiscount =
+          promo.discount_type === "pct"
+            ? Math.floor(originalSubtotal * (Number(promo.discount_value) / 100))
+            : Math.min(Number(promo.discount_value), originalSubtotal);
+        validatedPromoId = promo.id;
+      }
+    }
+  }
+
+  // Larger discount wins — campaign and coupon do not stack.
+  const discountAmount = Math.max(campaignDiscount, couponDiscount);
+  // Store promo_id only when coupon wins; null signals automatic campaign discount.
+  const storedPromoId = couponDiscount >= campaignDiscount ? validatedPromoId : null;
+
+  const total = Math.max(0, originalSubtotal + shipping - discountAmount);
 
   // -----------------------------------------------------------------------
   // Step B: Save to Supabase
@@ -97,8 +149,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     payment_method: validInput.paymentMethod,
     payment_status:
       validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
-    subtotal,
+    subtotal: originalSubtotal,
     shipping,
+    discount_amount: discountAmount,
+    promo_id: storedPromoId,
     total,
     shipping_address: validInput.address,
     otp_verified: validInput.otpVerified,
@@ -140,5 +194,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   }
 
   revalidatePath("/account/orders");
-  return { ok: true, orderId };
+
+  // Send confirmation immediately for COD. Bank transfer waits for admin receipt approval.
+  if (userData.user.email && validInput.paymentMethod !== "bank_transfer") {
+    try {
+      await sendOrderConfirmationEmail(orderId, userData.user.email);
+    } catch (err) {
+      console.error("Order confirmation email failed:", err);
+    }
+  }
+
+  return { ok: true, orderId, total };
 }

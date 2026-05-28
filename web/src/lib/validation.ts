@@ -18,12 +18,14 @@ export const LoginSchema = z.object({
 });
 
 export const AddressSchema = z.object({
-  name: z.string().min(2).max(100),
+  fullName: z.string().min(2).max(100),
   phone: z.string().min(7).max(20),
   line1: z.string().min(5).max(200),
   line2: z.string().max(200).optional(),
   city: z.string().min(2).max(100),
   province: z.string().min(2).max(100),
+  postalCode: z.string().max(20).optional(),
+  country: z.string().max(50).optional(),
 });
 
 export const CartLineSchema = z.object({
@@ -39,6 +41,7 @@ export const PlaceOrderSchema = z.object({
   address: AddressSchema,
   paymentMethod: z.enum(["cod", "bank_transfer"]),
   otpVerified: z.boolean(),
+  promoId: z.string().uuid().optional(),
 });
 
 export const PriceSchema = z.number().finite().min(100).max(1_000_000);

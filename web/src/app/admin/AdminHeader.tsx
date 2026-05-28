@@ -23,6 +23,10 @@ const HEADER_MAP: Record<string, { title: string; desc: string }> = {
     title: "Stock & Inventory Control",
     desc: "Track and adjust fabric stock levels dynamically by color. Monitor low quantities and manage stock reserves.",
   },
+  "/admin/promotions": {
+    title: "Promotions",
+    desc: "Create and manage homepage popup banners and checkout coupon codes. Toggle promotions on/off and set expiry dates.",
+  },
 };
 
 export function AdminHeader() {

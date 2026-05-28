@@ -51,6 +51,7 @@ export function SocialAuthButtons({ next = "/account" }: { next?: string }) {
         <span>{busy === "google" ? "Redirecting…" : "Continue with Google"}</span>
       </button>
 
+      {/* Apple auth — re-enable post-launch after configuring Apple OAuth credentials in Supabase
       <button
         type="button"
         onClick={() => sign("apple")}
@@ -60,6 +61,7 @@ export function SocialAuthButtons({ next = "/account" }: { next?: string }) {
         <AppleMark />
         <span>{busy === "apple" ? "Redirecting…" : "Continue with Apple"}</span>
       </button>
+      */}
 
       {error && <p className="text-xs text-accent">{error}</p>}
     </div>

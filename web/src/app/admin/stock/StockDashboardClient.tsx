@@ -9,6 +9,7 @@ import {
   addProductColor,
   removeProductColor,
 } from "@/lib/actions/admin";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 interface ProductItem {
   id: string;
@@ -63,6 +64,11 @@ export function StockDashboardClient({
   const [addFormPrice, setAddFormPrice] = useState("");
   const [addFormComposition, setAddFormComposition] = useState("");
   const [addFormDescription, setAddFormDescription] = useState("");
+  const [addFormWeaveType, setAddFormWeaveType] = useState("");
+  const [addFormThreadCount, setAddFormThreadCount] = useState("");
+  const [addFormImageFile, setAddFormImageFile] = useState<File | null>(null);
+  const [addFormImagePreview, setAddFormImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -213,13 +219,41 @@ export function StockDashboardClient({
     setAddError(null);
 
     try {
+      let imageUrl: string | null = null;
+
+      if (addFormImageFile) {
+        setIsUploadingImage(true);
+        const supabase = createSupabaseBrowser();
+        const ext = addFormImageFile.name.split(".").pop() ?? "jpg";
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("product-images")
+          .upload(path, addFormImageFile, { cacheControl: "3600", upsert: false });
+        if (uploadErr) {
+          setIsUploadingImage(false);
+          setAddError(`Image upload failed: ${uploadErr.message}`);
+          setIsSubmittingAdd(false);
+          return;
+        }
+        setIsUploadingImage(false);
+        const { data: { publicUrl } } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(path);
+        imageUrl = publicUrl;
+      }
+
+      const threadCountNum = addFormThreadCount ? parseInt(addFormThreadCount, 10) : null;
+
       const res = await adminCreateProduct(
         addFormName,
         addFormSlug,
         addFormCategory,
         priceNum,
         addFormComposition,
-        addFormDescription
+        addFormDescription,
+        imageUrl,
+        addFormWeaveType || null,
+        threadCountNum !== null && isNaN(threadCountNum) ? null : threadCountNum,
       );
 
       if (res.ok) {
@@ -229,16 +263,20 @@ export function StockDashboardClient({
         setAddFormPrice("");
         setAddFormComposition("");
         setAddFormDescription("");
+        setAddFormWeaveType("");
+        setAddFormThreadCount("");
+        setAddFormImageFile(null);
+        setAddFormImagePreview(null);
         setShowAddModal(false);
-        // Refresh the page to retrieve automatically seeded defaults (White and Black colors)
         window.location.reload();
       } else {
         setAddError(res.error || "Failed to create product.");
       }
-    } catch (err: any) {
-      setAddError(err.message || "An unexpected error occurred.");
+    } catch (err: unknown) {
+      setAddError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setIsSubmittingAdd(false);
+      setIsUploadingImage(false);
     }
   };
 
@@ -815,6 +853,66 @@ export function StockDashboardClient({
                 />
               </div>
 
+              {/* Fabric Image (optional) */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink">
+                  Fabric Image <span className="font-normal text-muted">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setAddFormImageFile(file);
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setAddFormImagePreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    } else {
+                      setAddFormImagePreview(null);
+                    }
+                  }}
+                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors cursor-pointer file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-stone-100 file:text-ink file:cursor-pointer"
+                />
+                {addFormImagePreview && (
+                  <div className="mt-2 relative w-20 h-20 border border-stone rounded overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={addFormImagePreview} alt="preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Weave Type (optional) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-ink">
+                    Weave Type <span className="font-normal text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Plain, Twill, Satin"
+                    value={addFormWeaveType}
+                    onChange={(e) => setAddFormWeaveType(e.target.value)}
+                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Thread Count (optional) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-ink">
+                    Thread Count <span className="font-normal text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 120"
+                    value={addFormThreadCount}
+                    onChange={(e) => setAddFormThreadCount(e.target.value)}
+                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
               {/* Info notice about default colors */}
               <div className="bg-stone-50 border border-stone/50 rounded-lg p-3 text-xs text-muted flex items-start gap-2">
                 <svg className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -841,7 +939,7 @@ export function StockDashboardClient({
                   id="submit-add-btn"
                   className="px-4 py-2 text-xs font-bold text-paper bg-ink hover:bg-stone-900 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
                 >
-                  {isSubmittingAdd ? "Creating..." : "Create Product"}
+                  {isUploadingImage ? "Uploading image…" : isSubmittingAdd ? "Creating..." : "Create Product"}
                 </button>
               </div>
             </form>

@@ -10,6 +10,7 @@ import type { Product } from "@/lib/types";
 import type { Address, PaymentMethod } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
 import { placeOrder } from "@/lib/actions/orders";
+import { validateCoupon } from "@/lib/actions/promotions";
 import { ReceiptUploadForm } from "@/app/account/receipts/ReceiptUploadForm";
 
 type Step = 1 | 2 | 3;
@@ -54,6 +55,15 @@ export function CheckoutFlow({
   const [placePending, startPlaceTransition] = useTransition();
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{
+    promoId: string;
+    discountAmount: number;
+    code: string;
+  } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponPending, startCouponTransition] = useTransition();
+  const [confirmedTotal, setConfirmedTotal] = useState(0);
 
   useEffect(() => {
     if (lines.length === 0) return;
@@ -79,8 +89,10 @@ export function CheckoutFlow({
     setOtpVerified(false);
   };
 
+  const displayTotal = couponApplied ? Math.max(0, total - couponApplied.discountAmount) : total;
+
   if (placedOrderId) {
-    return <Confirmation orderId={placedOrderId} method={payment} total={total} />;
+    return <Confirmation orderId={placedOrderId} method={payment} total={confirmedTotal} />;
   }
 
   if (lines.length === 0) {
@@ -128,6 +140,24 @@ export function CheckoutFlow({
     });
   };
 
+  const handleApplyCoupon = () => {
+    setCouponError(null);
+    const subtotalForCoupon = [...lines].reduce((sum, line) => {
+      const product = productMap.get(line.productId);
+      if (!product) return sum;
+      return sum + lineSubtotal(line, product);
+    }, 0);
+    startCouponTransition(async () => {
+      const res = await validateCoupon(couponCode.trim(), subtotalForCoupon);
+      if (res.ok) {
+        setCouponApplied({ promoId: res.promoId, discountAmount: res.discountAmount, code: res.code });
+      } else {
+        setCouponError(res.error);
+        setCouponApplied(null);
+      }
+    });
+  };
+
   const handlePlace = () => {
     setPlaceError(null);
     startPlaceTransition(async () => {
@@ -136,8 +166,10 @@ export function CheckoutFlow({
         address,
         paymentMethod: payment,
         otpVerified,
+        promoId: couponApplied?.promoId,
       });
       if (res.ok) {
+        setConfirmedTotal(res.total);
         setPlacedOrderId(res.orderId);
         clear();
       } else {
@@ -199,6 +231,41 @@ export function CheckoutFlow({
           {step === 2 && (
             <section className="space-y-6">
               <h2 className="display text-2xl">Payment method</h2>
+
+              {/* Promo code */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-ink">Promo Code <span className="font-normal text-muted">(optional)</span></p>
+                {couponApplied ? (
+                  <div className="flex items-center justify-between border border-green-300 bg-green-50 rounded px-4 py-3 text-sm">
+                    <span className="text-green-700 font-medium">
+                      ✓ {couponApplied.code} — PKR {couponApplied.discountAmount.toLocaleString()} off
+                    </span>
+                    <button
+                      onClick={() => { setCouponApplied(null); setCouponCode(""); }}
+                      className="text-xs text-muted underline cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      className="input flex-1 uppercase"
+                      placeholder="Enter code"
+                      value={couponCode}
+                      onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); }}
+                    />
+                    <button
+                      onClick={handleApplyCoupon}
+                      disabled={couponPending || !couponCode.trim()}
+                      className="btn btn-ghost text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {couponPending ? "…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {couponError && <p className="text-xs text-accent">{couponError}</p>}
+              </div>
 
               <label
                 className={`block border p-5 cursor-pointer ${
@@ -341,6 +408,32 @@ export function CheckoutFlow({
                 </div>
               </label>
 
+              {/* Card payment — wired post-launch. See docs/superpowers/specs/ for integration notes. */}
+              <div
+                className="block border border-stone p-5 opacity-50 cursor-not-allowed select-none"
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="card"
+                    disabled
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">Pay with Card</p>
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      Credit and debit cards via secure payment gateway. Available soon.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-between">
                 <button onClick={() => setStep(1)} className="link-underline text-sm">
                   ← Back
@@ -401,7 +494,7 @@ export function CheckoutFlow({
                 className="btn btn-primary w-full"
                 disabled={placePending}
               >
-                {placePending ? "Placing order…" : `Place order — ${formatPKR(total)}`}
+                {placePending ? "Placing order…" : `Place order — ${formatPKR(displayTotal)}`}
               </button>
               {placeError && (
                 <p className="text-xs text-accent text-center">{placeError}</p>
@@ -423,13 +516,15 @@ export function CheckoutFlow({
                   className="flex gap-3 py-3"
                 >
                   <div className="relative h-16 w-12 shrink-0 bg-mist overflow-hidden">
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                    />
+                    {product.images[0] && (
+                      <Image
+                        src={product.images[0]}
+                        alt={product.name}
+                        fill
+                        sizes="48px"
+                        className="object-cover"
+                      />
+                    )}
                   </div>
                   <div className="flex-1 text-sm min-w-0">
                     <p className="truncate font-medium">{product.name}</p>
@@ -465,9 +560,15 @@ export function CheckoutFlow({
               <dt className="text-muted">Shipping</dt>
               <dd>{shipping === 0 ? "Free" : formatPKR(shipping)}</dd>
             </div>
+            {couponApplied && (
+              <div className="flex justify-between text-sm">
+                <dt className="text-muted">Promo ({couponApplied.code})</dt>
+                <dd className="text-green-600 font-medium">−{formatPKR(couponApplied.discountAmount)}</dd>
+              </div>
+            )}
             <div className="flex justify-between border-t border-stone pt-3 text-base">
               <dt>Total</dt>
-              <dd>{formatPKR(total)}</dd>
+              <dd>{formatPKR(displayTotal)}</dd>
             </div>
           </dl>
         </aside>

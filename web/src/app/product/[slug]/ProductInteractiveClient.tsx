@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { type Product } from "@/lib/types";
+import { type ProductDiscount } from "@/lib/campaigns";
 import { formatPKR } from "@/lib/format";
 import { AddToCart } from "./AddToCart";
 
@@ -16,11 +17,13 @@ interface ProductColor {
 interface ProductInteractiveClientProps {
   product: Product;
   colors: ProductColor[];
+  discount?: ProductDiscount;
 }
 
 export function ProductInteractiveClient({
   product,
   colors,
+  discount,
 }: ProductInteractiveClientProps) {
   // Try to find a matching default color or fallback to first color or White
   const initialColor =
@@ -82,8 +85,18 @@ export function ProductInteractiveClient({
         <p className="eyebrow text-muted capitalize">{product.category}</p>
         <h1 className="display mt-2 text-4xl sm:text-5xl">{product.name}</h1>
 
-        <div className="mt-6 flex items-baseline gap-3">
-          <p className="text-2xl">{formatPKR(product.pricePerSuit)}</p>
+        <div className="mt-6 flex items-baseline gap-3 flex-wrap">
+          {discount ? (
+            <>
+              <p className="text-2xl font-semibold text-ink">{formatPKR(discount.discountedPricePerSuit)}</p>
+              <p className="text-base text-muted line-through">{formatPKR(product.pricePerSuit)}</p>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                {discount.label}
+              </span>
+            </>
+          ) : (
+            <p className="text-2xl">{formatPKR(product.pricePerSuit)}</p>
+          )}
           <p className="text-xs text-muted uppercase tracking-[0.14em]">/ suit</p>
         </div>
 
@@ -167,7 +180,7 @@ export function ProductInteractiveClient({
         </div>
 
         {/* Add to Cart Actions */}
-        <AddToCart product={product} color={selectedColor} stock={currentStock} />
+        <AddToCart product={product} color={selectedColor} stock={currentStock} discount={discount} />
 
         <dl className="mt-10 grid grid-cols-2 gap-y-3 gap-x-6 border-t border-stone pt-6 text-sm">
           <dt className="text-muted">Composition</dt>

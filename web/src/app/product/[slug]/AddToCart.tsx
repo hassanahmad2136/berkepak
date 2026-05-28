@@ -6,6 +6,7 @@ import {
   type SaleUnit,
   type Stitching,
 } from "@/lib/types";
+import { type ProductDiscount } from "@/lib/campaigns";
 import { useCart } from "@/lib/cart-store";
 import { formatPKR } from "@/lib/format";
 
@@ -13,13 +14,14 @@ interface AddToCartProps {
   product: Product;
   color: string;
   stock: number;
+  discount?: ProductDiscount;
 }
 
-export function AddToCart({ product, color, stock }: AddToCartProps) {
+export function AddToCart({ product, color, stock, discount }: AddToCartProps) {
   const [quantity, setQuantity] = useState(1);
   const add = useCart((s) => s.add);
 
-  const unitPrice = product.pricePerSuit;
+  const unitPrice = discount?.discountedPricePerSuit ?? product.pricePerSuit;
   const total = unitPrice * quantity;
   const isOutOfStock = stock === 0;
 
@@ -41,7 +43,7 @@ export function AddToCart({ product, color, stock }: AddToCartProps) {
   };
 
   const handleAddToCart = () => {
-    add(product.id, product.slug, "suit", quantity, "none", color);
+    add(product.id, product.slug, "suit", quantity, "none", color, discount?.discountedPricePerSuit);
   };
 
   return (

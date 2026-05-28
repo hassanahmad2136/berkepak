@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
 import { getProducts } from "@/lib/products";
+import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import type { FabricCategory, FabricWeave } from "@/lib/types";
 import Link from "next/link";
 
@@ -65,7 +66,7 @@ export default async function ShopPage(props: {
   const activeWeave = params.weave as FabricWeave | undefined;
   const sort = params.sort ?? "featured";
 
-  const allProducts = await getProducts();
+  const [allProducts, campaigns] = await Promise.all([getProducts(), getActiveCampaigns()]);
   let filtered = allProducts.slice();
 
   if (activeCategory !== "all") {
@@ -188,9 +189,11 @@ export default async function ShopPage(props: {
             </p>
           ) : (
             <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
+              {filtered.map((p) => {
+                const campaign = getCampaignForProduct(p.id, p.category, campaigns);
+                const discount = campaign ? computeDiscount(p.pricePerSuit, p.pricePerMeter, campaign) : undefined;
+                return <ProductCard key={p.id} product={p} discount={discount} />;
+              })}
             </div>
           )}
         </div>
