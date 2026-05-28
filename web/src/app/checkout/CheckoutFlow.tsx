@@ -341,6 +341,31 @@ export function CheckoutFlow({
                 </div>
               </label>
 
+              {/* Card payment — wired post-launch. See docs/superpowers/specs/ for integration notes. */}
+              <div
+                className="block border border-stone p-5 opacity-50 cursor-not-allowed select-none"
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    disabled
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">Pay with Card</p>
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">
+                        Coming Soon
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      Credit and debit cards via secure payment gateway. Available soon.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-between">
                 <button onClick={() => setStep(1)} className="link-underline text-sm">
                   ← Back
