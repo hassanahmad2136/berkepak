@@ -3,17 +3,33 @@ import Image from "next/image"; // still used in fabricOfMonth + category grid
 import { ProductCard } from "@/components/ProductCard";
 import { getNewArrivalsAsync, getFeaturedAsync, getProducts } from "@/lib/products";
 import { HeroSlideshow } from "@/components/HeroSlideshow";
+import { PromotionPopup } from "@/components/PromotionPopup";
+import { createSupabaseAdmin } from "@/lib/supabase/server";
 
 export default async function HomePage() {
-  const [newArrivals, featured, allProducts] = await Promise.all([
+  const now = new Date().toISOString();
+  const [newArrivals, featured, allProducts, bannersRes] = await Promise.all([
     getNewArrivalsAsync(),
     getFeaturedAsync(),
     getProducts(),
+    createSupabaseAdmin()
+      .from("promotions")
+      .select("id, title, body")
+      .eq("type", "banner")
+      .eq("is_active", true)
+      .or(`starts_at.is.null,starts_at.lte.${now}`)
+      .or(`ends_at.is.null,ends_at.gte.${now}`)
+      .order("created_at", { ascending: false })
+      .limit(1),
   ]);
+
+  const banners = (bannersRes.data ?? []) as Array<{ id: string; title: string; body: string | null }>;
   const fabricOfMonth = featured[0];
 
   return (
     <>
+      <PromotionPopup banners={banners} />
+
       <section className="relative h-[88dvh] w-full overflow-hidden">
         <HeroSlideshow />
       </section>
