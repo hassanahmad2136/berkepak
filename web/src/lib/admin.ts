@@ -13,8 +13,10 @@ export function isAdminEmail(email: string | null | undefined): boolean {
  * Robust administrator auth check.
  * Validates against:
  * 1. ADMIN_EMAILS environment variable whitelist.
- * 2. Supabase Auth user metadata (`is_admin: true` or `role: 'admin'`).
- * 3. Supabase profiles table (`is_admin: true`).
+ * 2. admin_users table (service-role lookup, RLS-protected).
+ *
+ * SECURITY: user_metadata checks removed — users can self-modify metadata from browser console.
+ * Now uses admin_users table with BYPASSRLS service role for secure lookup.
  */
 export async function isCurrentUserAdmin(): Promise<boolean> {
   try {
@@ -27,22 +29,22 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
       return true;
     }
 
-    // 2. Check auth metadata
-    if (
-      data.user.user_metadata?.is_admin === true ||
-      data.user.user_metadata?.role === "admin"
-    ) {
-      return true;
-    }
+    // 2. Check admin_users table via service role (bypasses RLS)
+    const { createSupabaseAdmin } = await import("@/lib/supabase/server");
+    const adminClient = createSupabaseAdmin();
 
-    // 3. Check profiles table
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", data.user.id)
+    const { data: adminUser, error } = await adminClient
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", data.user.id)
       .maybeSingle();
 
-    if (profile && (profile as any).is_admin === true) {
+    if (error) {
+      console.error("[AdminAuth] Error checking admin_users table:", error);
+      return false;
+    }
+
+    if (adminUser) {
       return true;
     }
 
