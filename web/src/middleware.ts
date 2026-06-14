@@ -55,10 +55,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
-    // Import here to avoid issues in middleware initialization
-    const { createClient } = await import("@supabase/supabase-js");
-    const adminClient = createClient(adminUrl, adminKey, {
+    // Use edge-safe createServerClient instead of dynamic import
+    const adminClient = createServerClient(adminUrl, adminKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      cookies: {
+        getAll: () => [],
+        setAll: () => {},
+      },
     });
 
     const { data: adminUser, error } = await adminClient
