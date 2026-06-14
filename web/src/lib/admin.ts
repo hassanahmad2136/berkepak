@@ -1,5 +1,9 @@
 import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 
+if (process.env.NODE_ENV !== "test" && !process.env.ADMIN_EMAILS) {
+  console.warn("[AdminAuth] ADMIN_EMAILS env var is not set. Email-based admin bypass disabled. Add admin users via the admin_users table instead.");
+}
+
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const list = (process.env.ADMIN_EMAILS ?? "")
