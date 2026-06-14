@@ -527,7 +527,6 @@ async function notifyAdminsOfChange(actionName: string, details: string) {
         port: smtpPort,
         secure: smtpPort === 465,
         auth: { user: smtpUser, pass: smtpPass },
-        tls: { rejectUnauthorized: false },
       });
 
       await transporter.sendMail({

@@ -602,7 +602,7 @@ function Confirmation({
             <dt className="text-muted">Account Title</dt>
             <dd>Berke Pak Fabrics (Pvt) Ltd</dd>
             <dt className="text-muted">IBAN</dt>
-            <dd className="font-mono">PK00MEZN0000000000000000</dd>
+            <dd className="font-mono">{process.env.NEXT_PUBLIC_BANK_IBAN ?? 'Contact us at info@berkepakfabrics.com for bank details'}</dd>
             <dt className="text-muted">Raast ID</dt>
             <dd>03000000000</dd>
           </dl>

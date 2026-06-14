@@ -9,8 +9,6 @@ import { checkRateLimit } from "@/lib/rate-limit";
 export type OtpResult = {
   ok: boolean;
   error?: string;
-  /** Dev-only: OTP code returned in dev so the UI can show it. Never set in production. */
-  devCode?: string;
 };
 
 const OTP_TTL_MINUTES = 10;
@@ -82,6 +80,7 @@ export async function sendOtp(
 
   let liveSent = false;
   let liveError = "";
+  let deliveryWasExpected = false;
 
   if (method === "email") {
     const smtpHost = process.env.SMTP_HOST;
@@ -97,6 +96,7 @@ export async function sendOtp(
       smtpPass.trim() !== "";
 
     if (isSmtpConfigured) {
+      deliveryWasExpected = true;
       try {
         const transporter = nodemailer.createTransport({
           host: smtpHost,
@@ -105,9 +105,6 @@ export async function sendOtp(
           auth: {
             user: smtpUser,
             pass: smtpPass,
-          },
-          tls: {
-            rejectUnauthorized: false, // avoids handshake failures on cPanel servers with varying SSL structures
           },
         });
 
@@ -192,6 +189,7 @@ export async function sendOtp(
       twilioSid.trim() !== "";
 
     if (isTwilioConfigured) {
+      deliveryWasExpected = true;
       try {
         const client = twilio(twilioSid, twilioToken);
         await client.messages.create({
@@ -229,11 +227,13 @@ export async function sendOtp(
     }
   }
 
-  return {
-    ok: true,
-    devCode: process.env.NODE_ENV !== "production" ? code : undefined,
-    ...(liveError ? { error: `Delivery failed, fell back to dev mode: ${liveError}` } : {}),
-  };
+  // If delivery was expected (credentials configured) but failed, return an error.
+  // The OTP code is still logged server-side for developers to use in dev environments.
+  if (deliveryWasExpected && !liveSent) {
+    return { ok: false, error: `Delivery failed: ${liveError}. Check your details and try again.` };
+  }
+
+  return { ok: true };
 }
 
 export async function verifyOtp(
