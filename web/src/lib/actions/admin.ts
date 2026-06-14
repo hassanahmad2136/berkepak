@@ -197,33 +197,21 @@ export async function bulkUpdatePrices(
   }
 
   const admin = createSupabaseAdmin();
-  const errors: string[] = [];
 
-  for (const p of productsRes.products) {
-    let adjustment = type === "flat" ? amount : p.price * (amount / 100);
-    let newPrice = direction === "increase" ? p.price + adjustment : p.price - adjustment;
-    // Round to nearest 10 PKR, clamp to 0
+  // Compute all new prices first, then send a single batch upsert so a
+  // mid-loop interruption cannot leave the catalog with split pricing.
+  const updates = productsRes.products.map((p) => {
+    const adjustment = type === "flat" ? amount : p.price * (amount / 100);
+    const newPrice = direction === "increase" ? p.price + adjustment : p.price - adjustment;
     const roundedPrice = Math.min(1_000_000, Math.max(100, Math.round(newPrice / 10) * 10));
+    return { id: p.id, price_per_suit: roundedPrice, updated_at: new Date().toISOString() };
+  });
 
-    const { error } = await admin
-      .from("product_catalog")
-      .update({ price_per_suit: roundedPrice, updated_at: new Date().toISOString() })
-      .eq("id", p.id);
-
-    if (error) {
-      errors.push(`Failed to update ${p.name}: ${error.message}`);
-    }
-  }
+  const { error } = await admin.from("product_catalog").upsert(updates);
+  if (error) return { ok: false, error: `Bulk update failed: ${error.message}` };
 
   revalidatePath("/shop");
   revalidatePath("/admin/pricing");
-
-  if (errors.length > 0) {
-    return {
-      ok: false,
-      error: `Completed with errors. Failed to update ${errors.length} products. Details: ${errors.slice(0, 3).join("; ")}`,
-    };
-  }
 
   return { ok: true };
 }
