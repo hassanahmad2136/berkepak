@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -8,9 +8,15 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { Analytics } from "@/components/Analytics";
 import { AuthListener } from "@/components/AuthListener";
 
-const inter = Inter({
+const displayFont = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-display",
+  display: "swap",
+});
+
+const bodyFont = Hanken_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
   display: "swap",
 });
 
@@ -34,10 +40,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
       <body>
         <Header />
-        <main className="min-h-[60vh]">{children}</main>
+        <main className="min-h-[60dvh]">{children}</main>
         <Footer />
         <CartDrawer />
         <WhatsAppButton />
