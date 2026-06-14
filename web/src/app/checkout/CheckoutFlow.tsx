@@ -8,6 +8,7 @@ import { getProductByIdAsync } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
 import type { Product } from "@/lib/types";
 import type { Address, PaymentMethod } from "@/lib/types";
+import { BESPOKE_STITCHING_ADDON_PKR } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
 import { placeOrder } from "@/lib/actions/orders";
 import { validateCoupon } from "@/lib/actions/promotions";
@@ -78,7 +79,21 @@ export function CheckoutFlow({
   }, [lines]);
 
   const subtotal = useMemo(() => cartSubtotal(lines, productMap), [lines, productMap]);
-  const shipping = subtotal === 0 ? 0 : subtotal >= 10000 ? 0 : 350;
+  // Use the pre-discount (original) subtotal for the free-shipping threshold — same logic as the
+  // server in orders.ts — so the UI never shows "Free" when the server will charge PKR 350.
+  const originalSubtotal = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const product = productMap.get(line.productId);
+        if (!product) return sum;
+        const basePrice = line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
+        const addon =
+          line.stitching === "bespoke" && line.unit === "suit" ? BESPOKE_STITCHING_ADDON_PKR : 0;
+        return sum + (basePrice + addon) * line.quantity;
+      }, 0),
+    [lines, productMap],
+  );
+  const shipping = originalSubtotal === 0 ? 0 : originalSubtotal >= 10_000 ? 0 : 350;
   const total = subtotal + shipping;
 
   const selectOtpMethod = (method: "whatsapp" | "email") => {

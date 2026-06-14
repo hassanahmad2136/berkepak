@@ -151,60 +151,30 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const total = Math.max(0, originalSubtotal + shipping - discountAmount);
 
   // -----------------------------------------------------------------------
-  // Step B: Save to Supabase
+  // Step B+C: Atomically insert order + order_items + decrement stock.
+  // The PostgreSQL function place_order_atomic runs all three steps in a
+  // single transaction — any failure (including insufficient stock) rolls
+  // back the entire operation so the DB cannot end up with a partial order.
   // -----------------------------------------------------------------------
   const orderId = newOrderId();
 
-  const { error: orderErr } = await supabase.from("orders").insert({
-    id: orderId,
-    user_id: userData.user.id,
-    status: validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
-    payment_method: validInput.paymentMethod,
-    payment_status:
-      validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
-    subtotal: originalSubtotal,
-    shipping,
-    discount_amount: discountAmount,
-    promo_id: storedPromoId,
-    total,
-    shipping_address: validInput.address,
-    otp_verified: validInput.paymentMethod === "cod", // true only when server-side OTP check passed
-  });
-  if (orderErr) return { ok: false, error: orderErr.message };
-
-  const { error: itemsErr } = await supabase
-    .from("order_items")
-    .insert(items.map((it) => ({
-      order_id: orderId,
-      product_id: it.product_id,
-      product_name: it.product_name,
-      product_slug: it.product_slug,
-      unit: it.unit,
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      stitching: it.stitching,
-      stitching_addon: it.stitching_addon,
-      line_total: it.line_total,
-      color: it.color,
-    })));
-  if (itemsErr) return { ok: false, error: itemsErr.message };
-
-  // -----------------------------------------------------------------------
-  // Step C: Decrement product_colors stock (non-fatal — order already saved)
-  // -----------------------------------------------------------------------
   const adminClient = createSupabaseAdmin();
-  for (const it of items) {
-    const { data: stockOk, error: decErr } = await adminClient.rpc("decrement_product_stock", {
-      p_product_id: it.product_id,
-      p_color_name: it.color,
-      p_quantity: it.quantity,
-    });
-    if (decErr) {
-      console.error(`Stock decrement error for product ${it.product_id}:`, decErr.message);
-    } else if (!stockOk) {
-      console.warn(`Insufficient stock for product ${it.product_id} color ${it.color} — order saved, stock not decremented`);
-    }
-  }
+  const { error: placeErr } = await adminClient.rpc("place_order_atomic", {
+    p_order_id: orderId,
+    p_user_id: userData.user.id,
+    p_status: validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
+    p_payment_method: validInput.paymentMethod,
+    p_payment_status: validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
+    p_subtotal: originalSubtotal,
+    p_shipping: shipping,
+    p_discount_amount: discountAmount,
+    p_promo_id: storedPromoId,
+    p_total: total,
+    p_shipping_address: validInput.address,
+    p_otp_verified: validInput.paymentMethod === "cod",
+    p_items: items,  // Supabase serializes as JSONB
+  });
+  if (placeErr) return { ok: false, error: placeErr.message };
 
   revalidatePath("/account/orders");
 
