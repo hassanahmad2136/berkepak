@@ -4,7 +4,7 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, checkRateLimitByKey } from "@/lib/rate-limit";
 
 export type OtpResult = {
   ok: boolean;
@@ -54,8 +54,9 @@ export async function sendOtp(
   target: string,
   method: "whatsapp" | "email",
 ): Promise<OtpResult> {
-  // Per-target rate limit: max 3 OTPs per target per window (prevents flooding a victim's number/email)
-  const targetRateLimit = await checkRateLimit(`otp_send:${target}`, 3);
+  // Per-target rate limit: max 3 OTPs per target per window, keyed by target only (no IP suffix)
+  // so rotating IPs cannot bypass the limit for a given victim phone/email.
+  const targetRateLimit = await checkRateLimitByKey(`otp_send:${target}`, 3);
   if (!targetRateLimit.success) {
     return { ok: false, error: targetRateLimit.error ?? "Too many OTP requests. Please wait before trying again." };
   }

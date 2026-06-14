@@ -76,7 +76,47 @@ function inMemoryCheck(key: string, limit: number, windowMs: number): boolean {
   return true;
 }
 
+// ---- Internal shared limiter ----
+async function applyLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<{ success: boolean; error?: string }> {
+  const upstash = await getUpstashFn();
+  if (upstash) {
+    const result = await upstash(key, limit, windowMs);
+    if (!result.success) {
+      console.warn(`[RateLimit/Upstash] Blocked: ${key}`);
+      return { success: false, error: "Too many requests. Please wait a moment and try again." };
+    }
+    return { success: true };
+  }
+  const allowed = inMemoryCheck(key, limit, windowMs);
+  if (!allowed) {
+    console.warn(`[RateLimit/InMemory] Blocked: ${key}`);
+    return { success: false, error: "Too many requests. Please wait a moment and try again." };
+  }
+  return { success: true };
+}
+
 // ---- Public API ----
+
+// Rate-limit by target key only — no IP appended.
+// Use for per-entity limits (e.g. per phone number) where IP-based bucketing would
+// let distributed attackers bypass the limit by rotating IPs.
+export async function checkRateLimitByKey(
+  key: string,
+  limit: number,
+  windowMs: number = 60000,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return await applyLimit(key, limit, windowMs);
+  } catch (err) {
+    console.warn("[RateLimit] Error, bypassing:", err);
+    return { success: true };
+  }
+}
+
 export async function checkRateLimit(
   keyPrefix: string,
   limit: number,
@@ -91,23 +131,7 @@ export async function checkRateLimit(
     const ip = rawIp.split(",")[0].trim();
     const key = `${keyPrefix}:${ip}`;
 
-    const upstash = await getUpstashFn();
-    if (upstash) {
-      const result = await upstash(key, limit, windowMs);
-      if (!result.success) {
-        console.warn(`[RateLimit/Upstash] Blocked: ${key}`);
-        return { success: false, error: "Too many requests. Please wait a moment and try again." };
-      }
-      return { success: true };
-    }
-
-    // Fallback: in-memory (single-instance only — not suitable for Vercel multi-instance)
-    const allowed = inMemoryCheck(key, limit, windowMs);
-    if (!allowed) {
-      console.warn(`[RateLimit/InMemory] Blocked: ${key}`);
-      return { success: false, error: "Too many requests. Please wait a moment and try again." };
-    }
-    return { success: true };
+    return await applyLimit(key, limit, windowMs);
   } catch (err) {
     console.warn("[RateLimit] Error, bypassing:", err);
     return { success: true };
