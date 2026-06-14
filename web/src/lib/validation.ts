@@ -40,7 +40,6 @@ export const PlaceOrderSchema = z.object({
   lines: z.array(CartLineSchema).min(1, "Cart is empty.").max(20),
   address: AddressSchema,
   paymentMethod: z.enum(["cod", "bank_transfer"]),
-  otpVerified: z.boolean(),
   promoId: z.string().uuid().optional(),
 });
 

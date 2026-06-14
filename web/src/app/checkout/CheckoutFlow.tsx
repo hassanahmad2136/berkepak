@@ -165,7 +165,6 @@ export function CheckoutFlow({
         lines,
         address,
         paymentMethod: payment,
-        otpVerified,
         promoId: couponApplied?.promoId,
       });
       if (res.ok) {

@@ -20,7 +20,6 @@ export type PlaceOrderInput = {
   lines: CartLine[];
   address: Address;
   paymentMethod: PaymentMethod;
-  otpVerified: boolean;
   promoId?: string;
 };
 
@@ -53,8 +52,22 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (!userData.user) return { ok: false, error: "Please sign in to place an order." };
 
   if (validInput.lines.length === 0) return { ok: false, error: "Cart is empty." };
-  if (validInput.paymentMethod === "cod" && !validInput.otpVerified) {
-    return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
+
+  // For COD: verify OTP was actually consumed server-side — never trust a client boolean.
+  if (validInput.paymentMethod === "cod") {
+    const adminOtp = createSupabaseAdmin();
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15-min window
+    const { data: otpRow } = await adminOtp
+      .from("otp_codes")
+      .select("id")
+      .eq("phone", validInput.address.phone)
+      .not("consumed_at", "is", null)
+      .gte("consumed_at", cutoff)
+      .limit(1)
+      .maybeSingle();
+    if (!otpRow) {
+      return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
+    }
   }
 
   // Fetch active campaigns once — used for per-line discount computation.
@@ -155,7 +168,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     promo_id: storedPromoId,
     total,
     shipping_address: validInput.address,
-    otp_verified: validInput.otpVerified,
+    otp_verified: validInput.paymentMethod === "cod", // true only when server-side OTP check passed
   });
   if (orderErr) return { ok: false, error: orderErr.message };
 
