@@ -330,7 +330,7 @@ export function StockDashboardClient({
         <div>
           <h3 className="text-xl font-bold text-ink">Inventory Management</h3>
           <p className="text-xs text-muted mt-0.5">
-            Audit and adjust fabric stock levels by color, configure visibility, and maintain real-time Supabase / Saleor catalogs.
+            Audit and adjust fabric stock levels by color, configure visibility, and maintain real-time catalog data.
           </p>
         </div>
         
@@ -635,7 +635,7 @@ export function StockDashboardClient({
                 Are you sure you want to permanently delete this product? This action will:
               </p>
               <ul className="list-disc list-inside text-xs text-muted mt-2 space-y-1 ml-1">
-                <li>Permanently remove it from Saleor catalog.</li>
+                <li>Permanently remove it from the product catalog.</li>
                 <li>Delete it from the Supabase database.</li>
                 <li>Cascade and delete all color variations and stock records.</li>
                 <li>Send an administrative alert email notification.</li>
