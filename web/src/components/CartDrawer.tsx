@@ -70,12 +70,13 @@ export function CartDrawer() {
       <div
         aria-hidden={!isOpen}
         onClick={close}
-        className={`fixed inset-0 z-40 bg-ink/30 transition-opacity ${
+        className={`fixed inset-0 z-50 bg-ink/30 transition-opacity ${
           isOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
       <aside
         role="dialog"
+        aria-modal="true"
         aria-label="Cart"
         className={`fixed right-0 top-0 z-50 flex h-dvh w-full max-w-md flex-col bg-paper shadow-xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "translate-x-full"

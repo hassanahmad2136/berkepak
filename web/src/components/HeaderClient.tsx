@@ -45,7 +45,7 @@ export function HeaderClient({
 
   return (
     <header
-      className={`sticky top-0 z-40 bg-paper transition-[border-color,backdrop-filter] ${
+      className={`sticky top-0 z-30 bg-paper transition-[border-color,backdrop-filter] ${
         scrolled
           ? "border-b border-stone backdrop-blur-md bg-paper/90"
           : "border-b border-transparent"
@@ -59,7 +59,7 @@ export function HeaderClient({
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-6 px-4 sm:px-8">
         <button
           aria-label="Menu"
-          className="flex h-8 w-8 items-center justify-center md:hidden"
+          className="flex h-8 w-8 items-center justify-center md:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-sm"
           onClick={() => setMobileOpen((v) => !v)}
         >
           <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
@@ -69,7 +69,7 @@ export function HeaderClient({
 
         <nav className="hidden items-center gap-8 text-[13px] md:flex">
           {navLinks.map((l) => (
-            <Link key={l.href} href={l.href} className="link-underline">
+            <Link key={l.href} href={l.href} className="link-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-sm">
               {l.label}
             </Link>
           ))}
@@ -93,7 +93,7 @@ export function HeaderClient({
         <div className="flex items-center gap-5 text-[13px]">
           <button
             onClick={() => setSearchOpen(true)}
-            className="link-underline relative cursor-pointer"
+            className="link-underline relative cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-sm"
             aria-label="Search fabrics"
           >
             Search
@@ -131,7 +131,7 @@ export function HeaderClient({
           )}
           <button
             onClick={open}
-            className="link-underline relative"
+            className="link-underline relative focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-sm"
             aria-label="Cart"
           >
             Cart{count > 0 ? ` (${count})` : ""}

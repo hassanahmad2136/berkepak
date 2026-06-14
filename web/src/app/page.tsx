@@ -32,7 +32,7 @@ export default async function HomePage() {
     <>
       <PromotionPopup banners={banners} />
 
-      <section className="relative h-[88dvh] w-full overflow-hidden">
+      <section className="relative min-h-[88dvh] w-full overflow-hidden">
         <HeroSlideshow />
       </section>
 
@@ -92,7 +92,7 @@ export default async function HomePage() {
                   href={`/product/${fabricOfMonth.slug}`}
                   className="btn btn-primary mt-10"
                 >
-                  Discover
+                  Shop Fabric
                 </Link>
               </div>
             </div>
@@ -113,16 +113,17 @@ export default async function HomePage() {
             <Link
               key={c.slug}
               href={`/shop?category=${c.slug}`}
-              className="group relative block aspect-[3/4] overflow-hidden bg-mist"
+              aria-label={`Shop ${c.label} fabrics`}
+              className="group relative block aspect-[3/4] overflow-hidden bg-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-sm"
             >
               <Image
                 src={c.img}
-                alt={c.label}
+                alt=""
                 fill
                 sizes="(min-width: 1024px) 25vw, 50vw"
-                className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                className="object-cover transition-transform duration-700 [@media(hover:hover)]:group-hover:scale-[1.04]"
               />
-              <div className="absolute inset-0 bg-ink/10 transition-colors group-hover:bg-ink/30" />
+              <div className="absolute inset-0 bg-ink/10 transition-colors [@media(hover:hover)]:group-hover:bg-ink/30" />
               <span className="absolute bottom-5 left-5 text-paper display text-2xl">
                 {c.label}
               </span>
@@ -134,20 +135,20 @@ export default async function HomePage() {
       <section className="border-t border-stone">
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-16 grid gap-10 sm:grid-cols-3 text-sm">
           <div>
-            <p className="eyebrow">Ships from Lahore</p>
+            <p className="text-xs font-semibold uppercase tracking-wide">Ships from Lahore</p>
             <p className="mt-3 text-muted">
               Free domestic shipping over Rs 10,000. Worldwide DHL on request (coming soon).
             </p>
           </div>
           <div>
-            <p className="eyebrow">COD &amp; Bank Transfer</p>
+            <p className="text-xs font-semibold uppercase tracking-wide">COD &amp; Bank Transfer</p>
             <p className="mt-3 text-muted">
               Pay on delivery with OTP verification, or via Raast / IBAN
               transfer with manual receipt review.
             </p>
           </div>
           <div>
-            <p className="eyebrow">Heritage Quality</p>
+            <p className="text-xs font-semibold uppercase tracking-wide">Heritage Quality</p>
             <p className="mt-3 text-muted">
               Sourced directly from historical craft regions, curated to ensure the finest weaves.
             </p>
