@@ -54,6 +54,13 @@ export async function sendOtp(
   target: string,
   method: "whatsapp" | "email",
 ): Promise<OtpResult> {
+  // Per-target rate limit: max 3 OTPs per target per window (prevents flooding a victim's number/email)
+  const targetRateLimit = await checkRateLimit(`otp_send:${target}`, 3);
+  if (!targetRateLimit.success) {
+    return { ok: false, error: targetRateLimit.error ?? "Too many OTP requests. Please wait before trying again." };
+  }
+
+  // Global IP-based rate limit
   const rateLimit = await checkRateLimit("otp_send", 5);
   if (!rateLimit.success) {
     return { ok: false, error: rateLimit.error };
