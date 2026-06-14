@@ -1,4 +1,4 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
 
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -30,7 +30,6 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
     }
 
     // 2. Check admin_users table via service role (bypasses RLS)
-    const { createSupabaseAdmin } = await import("@/lib/supabase/server");
     const adminClient = createSupabaseAdmin();
 
     const { data: adminUser, error } = await adminClient

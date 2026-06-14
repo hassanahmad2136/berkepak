@@ -47,16 +47,15 @@ export async function middleware(request: NextRequest) {
     }
 
     // Authenticated, now check if admin via admin_users table (service role)
-    const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!adminUrl || !adminKey) {
+    if (!adminKey) {
       // Service role key missing, deny access
       return NextResponse.redirect(new URL("/", request.url));
     }
 
-    // Use edge-safe createServerClient instead of dynamic import
-    const adminClient = createServerClient(adminUrl, adminKey, {
+    // Service-role client with no-op cookie adapter (Edge Runtime compatible)
+    const adminClient = createServerClient(url, adminKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       cookies: {
         getAll: () => [],
