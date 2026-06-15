@@ -57,16 +57,19 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (validInput.paymentMethod === "cod") {
     const adminOtp = createSupabaseAdmin();
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15-min window
+    // OTP is sent to user's email (stored in otp_codes.phone column regardless of method).
+    // Phone-based OTP (WhatsApp) is not yet live, so we check by authenticated email.
+    const otpTarget = userData.user.email!;
     const { data: otpRow } = await adminOtp
       .from("otp_codes")
       .select("id")
-      .eq("phone", validInput.address.phone)
+      .eq("phone", otpTarget)
       .not("consumed_at", "is", null)
       .gte("consumed_at", cutoff)
       .limit(1)
       .maybeSingle();
     if (!otpRow) {
-      return { ok: false, error: "Mobile number must be verified for Cash on Delivery." };
+      return { ok: false, error: "Email address must be verified for Cash on Delivery." };
     }
   }
 
