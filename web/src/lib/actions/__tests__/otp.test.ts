@@ -177,7 +177,7 @@ describe("verifyOtp", () => {
     expect(adminClient.from).toHaveBeenCalledWith("otp_codes");
   });
 
-  it("returns ok:false when DB update to mark consumed fails", async () => {
+  it("returns ok:false when DB update to mark consumed_at fails", async () => {
     const validRow = {
       id: "otp-5",
       code: "1111",
@@ -200,13 +200,9 @@ describe("verifyOtp", () => {
     } as any;
     mockCreateSupabaseAdmin.mockReturnValue(adminClient);
 
-    // verifyOtp does NOT propagate update errors — it returns ok:true after consuming
-    // because the function only checks for read errors. This is the actual behavior.
-    // Let's verify that: the function returns ok:true as long as the select+code match work.
     const result = await verifyOtp("+921234567890", "1111");
-    // The function still returns ok:true even if the update silently fails
-    // This is current behavior — the test documents it.
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toMatch(/failed to consume/i);
   });
 });
 

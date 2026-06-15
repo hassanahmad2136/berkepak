@@ -4,6 +4,7 @@ import { getProducts } from "@/lib/products";
 import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import type { FabricCategory, FabricWeave } from "@/lib/types";
 import Link from "next/link";
+import { ShopFilterButton } from "./ShopFilterButton";
 
 const CATEGORY_META: Record<string, { title: string; description: string }> = {
   cotton: {
@@ -93,6 +94,30 @@ export default async function ShopPage(props: {
     return qs ? `/shop?${qs}` : "/shop";
   };
 
+  const weaveLinks = [
+    { label: "All weaves", href: buildHref({ weave: undefined }), active: !activeWeave },
+    ...WEAVES.map((w) => ({
+      label: w,
+      href: buildHref({ weave: w }),
+      active: activeWeave === w,
+    })),
+  ];
+
+  const sortOptions = [
+    { v: "featured", label: "Featured" },
+    { v: "new", label: "Newest" },
+    { v: "price-asc", label: "Price: Low to High" },
+    { v: "price-desc", label: "Price: High to Low" },
+  ];
+
+  const sortLinks = sortOptions.map((o) => ({
+    label: o.label,
+    href: buildHref({ sort: o.v }),
+    active: sort === o.v,
+  }));
+
+  const activeCount = (activeWeave ? 1 : 0) + (sort !== "featured" ? 1 : 0);
+
   return (
     <div className="mx-auto max-w-[1440px] px-4 sm:px-8 pt-10 pb-24">
       <div className="flex flex-col gap-3">
@@ -121,6 +146,14 @@ export default async function ShopPage(props: {
             </Link>
           );
         })}
+      </div>
+
+      <div className="mt-4 lg:hidden">
+        <ShopFilterButton
+          weaveLinks={weaveLinks}
+          sortLinks={sortLinks}
+          activeCount={activeCount}
+        />
       </div>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[220px_1fr]">

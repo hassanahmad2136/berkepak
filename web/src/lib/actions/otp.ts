@@ -281,9 +281,10 @@ export async function verifyOtp(
     return { ok: false, error: "Incorrect code." };
   }
 
-  await admin
+  const { error: consumeError } = await admin
     .from("otp_codes")
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", row.id);
+  if (consumeError) return { ok: false, error: "Failed to consume OTP. Please try again." };
   return { ok: true };
 }

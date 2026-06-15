@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useReducer, useEffect } from "react";
 import {
   updateProductColorStock,
   toggleProductVisibility,
@@ -10,25 +10,11 @@ import {
   removeProductColor,
 } from "@/lib/actions/admin";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-
-interface ProductItem {
-  id: string;
-  name: string;
-  slug: string;
-  sku: string;
-  price: number;
-  variantId: string;
-  available: boolean;
-}
-
-interface ProductColor {
-  id: string;
-  catalog_id: string;
-  color_name: string;
-  image_url: string | null;
-  stock: number;
-  product_name?: string;
-}
+import { stockReducer, initialStockState } from "./stockReducer";
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
+import { AddProductModal } from "./AddProductModal";
+import { AddColorModal } from "./AddColorModal";
+import type { ProductItem, ProductColor } from "./types";
 
 interface StockDashboardClientProps {
   products: ProductItem[];
@@ -39,287 +25,195 @@ export function StockDashboardClient({
   products,
   initialColors,
 }: StockDashboardClientProps) {
-  const [localProducts, setLocalProducts] = useState<ProductItem[]>(products);
-  const [colors, setColors] = useState<ProductColor[]>(initialColors);
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // Quick stock editing states
-  const [editingStock, setEditingStock] = useState<Record<string, number>>({});
-  const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
-  const [successIds, setSuccessIds] = useState<Record<string, boolean>>({});
-  const [errorIds, setErrorIds] = useState<Record<string, string | null>>({});
+  const [state, dispatch] = useReducer(stockReducer, initialStockState(products, initialColors));
 
-  // Toggling visibility state
-  const [isTogglingVisibility, setIsTogglingVisibility] = useState<Record<string, boolean>>({});
+  const {
+    localProducts, colors, searchQuery,
+    editingStock, savingIds, successIds, errorIds,
+    isTogglingVisibility,
+    showDeleteConfirm, isDeletingProductId,
+    showAddModal, addForm, isUploadingImage, isSubmittingAdd, addError,
+    showAddColorModal, addColorName, addColorStock, isSubmittingColor, addColorError,
+    removingColorId,
+  } = state;
 
-  // Delete product modal states
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [isDeletingProductId, setIsDeletingProductId] = useState<string | null>(null);
-
-  // Add product form states
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addFormName, setAddFormName] = useState("");
-  const [addFormSlug, setAddFormSlug] = useState("");
-  const [addFormCategory, setAddFormCategory] = useState("cotton");
-  const [addFormPrice, setAddFormPrice] = useState("");
-  const [addFormComposition, setAddFormComposition] = useState("");
-  const [addFormDescription, setAddFormDescription] = useState("");
-  const [addFormWeaveType, setAddFormWeaveType] = useState("");
-  const [addFormThreadCount, setAddFormThreadCount] = useState("");
-  const [addFormImageFile, setAddFormImageFile] = useState<File | null>(null);
-  const [addFormImagePreview, setAddFormImagePreview] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-
-  // Add color states
-  const [showAddColorModal, setShowAddColorModal] = useState<string | null>(null);
-  const [addColorName, setAddColorName] = useState("");
-  const [addColorStock, setAddColorStock] = useState("10");
-  const [isSubmittingColor, setIsSubmittingColor] = useState(false);
-  const [addColorError, setAddColorError] = useState<string | null>(null);
-
-  // Remove color states
-  const [removingColorId, setRemovingColorId] = useState<string | null>(null);
-
-  // Sync state changes on escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setShowAddModal(false);
-        setShowDeleteConfirm(null);
+        dispatch({ type: "ADD_MODAL_CLOSE" });
+        dispatch({ type: "DELETE_CONFIRM_CLOSE" });
+        dispatch({ type: "ADD_COLOR_MODAL_CLOSE" });
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Sync local products with props when they change
   useEffect(() => {
-    setLocalProducts(products);
+    dispatch({ type: "SET_PRODUCTS", products });
   }, [products]);
 
-  // Sync local colors with props when they change
   useEffect(() => {
-    setColors(initialColors);
+    dispatch({ type: "SET_COLORS", colors: initialColors });
   }, [initialColors]);
 
-  // Filter products by search query
   const filteredProducts = localProducts.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleNameChange = (val: string) => {
-    setAddFormName(val);
-    // Auto-generate slug from name
-    const generatedSlug = val
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    setAddFormSlug(generatedSlug);
-  };
-
   const handleStockInputChange = (colorId: string, val: string) => {
     const num = parseInt(val);
     if (isNaN(num) || num < 0) {
-      const next = { ...editingStock };
-      delete next[colorId];
-      setEditingStock(next);
+      dispatch({ type: "STOCK_EDIT_CLEAR", colorId });
       return;
     }
-    setEditingStock({
-      ...editingStock,
-      [colorId]: num,
-    });
-    setSuccessIds({ ...successIds, [colorId]: false });
-    setErrorIds({ ...errorIds, [colorId]: null });
+    dispatch({ type: "STOCK_EDIT_CHANGE", colorId, value: num });
   };
 
   const handleSaveStock = async (c: ProductColor) => {
     const newStock = editingStock[c.id];
     if (newStock === undefined || newStock === c.stock) return;
 
-    setSavingIds((prev) => ({ ...prev, [c.id]: true }));
-    setErrorIds((prev) => ({ ...prev, [c.id]: null }));
-    setSuccessIds((prev) => ({ ...prev, [c.id]: false }));
-
+    dispatch({ type: "STOCK_SAVE_START", colorId: c.id });
     try {
       const res = await updateProductColorStock(c.catalog_id, c.color_name, newStock);
       if (res.ok) {
-        setColors((prev) =>
-          prev.map((item) => (item.id === c.id ? { ...item, stock: newStock } : item))
-        );
-        setSuccessIds((prev) => ({ ...prev, [c.id]: true }));
-        const nextInput = { ...editingStock };
-        delete nextInput[c.id];
-        setEditingStock(nextInput);
+        dispatch({ type: "STOCK_SAVE_SUCCESS", colorId: c.id, newStock });
       } else {
-        setErrorIds((prev) => ({ ...prev, [c.id]: (res as any).error || "Failed." }));
+        dispatch({ type: "STOCK_SAVE_ERROR", colorId: c.id, error: (res as any).error || "Failed." });
       }
     } catch (err: any) {
-      setErrorIds((prev) => ({ ...prev, [c.id]: err.message || "Error occurred." }));
+      dispatch({ type: "STOCK_SAVE_ERROR", colorId: c.id, error: err.message || "Error occurred." });
     } finally {
-      setSavingIds((prev) => ({ ...prev, [c.id]: false }));
+      dispatch({ type: "STOCK_SAVE_DONE", colorId: c.id });
     }
   };
 
   const handleToggleVisibility = async (productId: string, visible: boolean) => {
-    setIsTogglingVisibility((prev) => ({ ...prev, [productId]: true }));
+    dispatch({ type: "VISIBILITY_TOGGLE_START", productId });
     try {
       const res = await toggleProductVisibility(productId, visible);
       if (res.ok) {
-        setLocalProducts((prev) =>
-          prev.map((p) => (p.id === productId ? { ...p, available: visible } : p))
-        );
+        dispatch({ type: "VISIBILITY_TOGGLE_DONE", productId, visible });
       } else {
+        dispatch({ type: "VISIBILITY_TOGGLE_DONE", productId });
         alert(res.error || "Failed to toggle visibility status.");
       }
     } catch (err: any) {
+      dispatch({ type: "VISIBILITY_TOGGLE_DONE", productId });
       alert(err.message || "An error occurred.");
-    } finally {
-      setIsTogglingVisibility((prev) => ({ ...prev, [productId]: false }));
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    setIsDeletingProductId(productId);
+    dispatch({ type: "DELETE_START", productId });
     try {
       const res = await adminDeleteProduct(productId);
       if (res.ok) {
-        setLocalProducts((prev) => prev.filter((p) => p.id !== productId));
-        setColors((prev) => prev.filter((c) => c.catalog_id !== productId));
-        setShowDeleteConfirm(null);
+        dispatch({ type: "DELETE_DONE", productId });
       } else {
+        dispatch({ type: "DELETE_CONFIRM_CLOSE" });
         alert(res.error || "Failed to delete product.");
       }
     } catch (err: any) {
+      dispatch({ type: "DELETE_CONFIRM_CLOSE" });
       alert(err.message || "An error occurred during deletion.");
-    } finally {
-      setIsDeletingProductId(null);
     }
   };
 
   const handleCreateProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addFormName || !addFormSlug || !addFormPrice || !addFormComposition || !addFormDescription) {
-      setAddError("All fields are required.");
+    if (!addForm.name || !addForm.slug || !addForm.price || !addForm.composition || !addForm.description) {
+      dispatch({ type: "ADD_SET_ERROR", error: "All fields are required." });
       return;
     }
-
-    const priceNum = parseFloat(addFormPrice);
+    const priceNum = parseFloat(addForm.price);
     if (isNaN(priceNum) || priceNum <= 0) {
-      setAddError("Price must be a valid positive number.");
+      dispatch({ type: "ADD_SET_ERROR", error: "Price must be a valid positive number." });
       return;
     }
 
-    setIsSubmittingAdd(true);
-    setAddError(null);
-
+    dispatch({ type: "ADD_SUBMIT_START" });
     try {
       let imageUrl: string | null = null;
-
-      if (addFormImageFile) {
-        setIsUploadingImage(true);
+      if (addForm.imageFile) {
+        dispatch({ type: "ADD_UPLOAD_START" });
         const supabase = createSupabaseBrowser();
-        const ext = addFormImageFile.name.split(".").pop() ?? "jpg";
+        const ext = addForm.imageFile.name.split(".").pop() ?? "jpg";
         const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         const { error: uploadErr } = await supabase.storage
           .from("product-images")
-          .upload(path, addFormImageFile, { cacheControl: "3600", upsert: false });
+          .upload(path, addForm.imageFile, { cacheControl: "3600", upsert: false });
         if (uploadErr) {
-          setIsUploadingImage(false);
-          setAddError(`Image upload failed: ${uploadErr.message}`);
-          setIsSubmittingAdd(false);
+          dispatch({ type: "ADD_SET_ERROR", error: `Image upload failed: ${uploadErr.message}` });
           return;
         }
-        setIsUploadingImage(false);
-        const { data: { publicUrl } } = supabase.storage
-          .from("product-images")
-          .getPublicUrl(path);
+        dispatch({ type: "ADD_UPLOAD_DONE" });
+        const { data: { publicUrl } } = supabase.storage.from("product-images").getPublicUrl(path);
         imageUrl = publicUrl;
       }
 
-      const threadCountNum = addFormThreadCount ? parseInt(addFormThreadCount, 10) : null;
-
+      const threadCountNum = addForm.threadCount ? parseInt(addForm.threadCount, 10) : null;
       const res = await adminCreateProduct(
-        addFormName,
-        addFormSlug,
-        addFormCategory,
+        addForm.name,
+        addForm.slug,
+        addForm.category,
         priceNum,
-        addFormComposition,
-        addFormDescription,
+        addForm.composition,
+        addForm.description,
         imageUrl,
-        addFormWeaveType || null,
+        addForm.weaveType || null,
         threadCountNum !== null && isNaN(threadCountNum) ? null : threadCountNum,
       );
 
       if (res.ok) {
-        setAddFormName("");
-        setAddFormSlug("");
-        setAddFormCategory("cotton");
-        setAddFormPrice("");
-        setAddFormComposition("");
-        setAddFormDescription("");
-        setAddFormWeaveType("");
-        setAddFormThreadCount("");
-        setAddFormImageFile(null);
-        setAddFormImagePreview(null);
-        setShowAddModal(false);
+        dispatch({ type: "ADD_RESET_FORM" });
         window.location.reload();
       } else {
-        setAddError(res.error || "Failed to create product.");
+        dispatch({ type: "ADD_SET_ERROR", error: res.error || "Failed to create product." });
       }
     } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : "An unexpected error occurred.");
+      dispatch({ type: "ADD_SET_ERROR", error: err instanceof Error ? err.message : "An unexpected error occurred." });
     } finally {
-      setIsSubmittingAdd(false);
-      setIsUploadingImage(false);
+      dispatch({ type: "ADD_SUBMIT_DONE" });
     }
   };
 
   const handleAddColor = async (catalogId: string) => {
     const name = addColorName.trim();
     const stock = parseInt(addColorStock);
-    if (!name) { setAddColorError("Color name is required."); return; }
-    if (isNaN(stock) || stock < 0) { setAddColorError("Stock must be 0 or greater."); return; }
+    if (!name) { dispatch({ type: "ADD_COLOR_SET_ERROR", error: "Color name is required." }); return; }
+    if (isNaN(stock) || stock < 0) { dispatch({ type: "ADD_COLOR_SET_ERROR", error: "Stock must be 0 or greater." }); return; }
 
-    setIsSubmittingColor(true);
-    setAddColorError(null);
-
+    dispatch({ type: "ADD_COLOR_SUBMIT_START" });
     try {
       const res = await addProductColor(catalogId, name, stock);
       if (res.ok) {
-        setAddColorName("");
-        setAddColorStock("10");
-        setShowAddColorModal(null);
+        dispatch({ type: "ADD_COLOR_SUBMIT_DONE" });
         window.location.reload();
       } else {
-        setAddColorError((res as any).error || "Failed to add color.");
+        dispatch({ type: "ADD_COLOR_SET_ERROR", error: (res as any).error || "Failed to add color." });
       }
     } catch (err: any) {
-      setAddColorError(err.message || "Unexpected error.");
-    } finally {
-      setIsSubmittingColor(false);
+      dispatch({ type: "ADD_COLOR_SET_ERROR", error: err.message || "Unexpected error." });
     }
   };
 
   const handleRemoveColor = async (colorId: string) => {
     if (!confirm("Remove this color variant? This cannot be undone.")) return;
-    setRemovingColorId(colorId);
+    dispatch({ type: "COLOR_REMOVE_START", colorId });
     try {
       const res = await removeProductColor(colorId);
       if (res.ok) {
-        setColors((prev) => prev.filter((c) => c.id !== colorId));
+        dispatch({ type: "COLOR_REMOVE_DONE", colorId });
       } else {
+        dispatch({ type: "COLOR_REMOVE_DONE", colorId });
         alert((res as any).error || "Failed to remove color.");
       }
     } catch (err: any) {
+      dispatch({ type: "COLOR_REMOVE_DONE", colorId });
       alert(err.message || "Unexpected error.");
-    } finally {
-      setRemovingColorId(null);
     }
   };
 
@@ -333,7 +227,7 @@ export function StockDashboardClient({
             Audit and adjust fabric stock levels by color, configure visibility, and maintain real-time catalog data.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
           <div className="relative flex-1 sm:flex-none sm:w-64">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -346,13 +240,13 @@ export function StockDashboardClient({
               placeholder="Search fabrics..."
               id="admin-search-input"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => dispatch({ type: "SET_SEARCH", query: e.target.value })}
               className="w-full border border-stone rounded-md pl-9 pr-4 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
             />
           </div>
 
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => dispatch({ type: "ADD_MODAL_OPEN" })}
             id="admin-create-fabric-btn"
             className="px-4 py-2 bg-ink hover:bg-stone-900 text-paper rounded-md text-sm font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
           >
@@ -387,7 +281,7 @@ export function StockDashboardClient({
                     <h4 className="font-semibold text-ink text-base">{p.name}</h4>
                     <p className="text-xs text-muted font-mono mt-0.5">SKU: {p.sku || "No SKU"}</p>
                   </div>
-                  
+
                   <div className="flex items-center gap-4 sm:self-center shrink-0 justify-between sm:justify-start">
                     {/* Storefront Visibility Toggle */}
                     <div className="flex items-center gap-2 border-r border-stone/60 pr-4">
@@ -419,12 +313,7 @@ export function StockDashboardClient({
 
                     {/* Add Color button */}
                     <button
-                      onClick={() => {
-                        setShowAddColorModal(p.id);
-                        setAddColorName("");
-                        setAddColorStock("10");
-                        setAddColorError(null);
-                      }}
+                      onClick={() => dispatch({ type: "ADD_COLOR_MODAL_OPEN", catalogId: p.id })}
                       className="p-1.5 text-stone-400 hover:text-emerald-700 rounded-md hover:bg-stone-100 transition-colors cursor-pointer active:scale-95"
                       title="Add Color Variant"
                     >
@@ -435,7 +324,7 @@ export function StockDashboardClient({
 
                     {/* Delete button */}
                     <button
-                      onClick={() => setShowDeleteConfirm(p.id)}
+                      onClick={() => dispatch({ type: "DELETE_CONFIRM_OPEN", productId: p.id })}
                       id={`delete-product-${p.id}`}
                       className="p-1.5 text-stone-400 hover:text-red-600 rounded-md hover:bg-stone-100 transition-colors cursor-pointer active:scale-95"
                       title="Delete Fabric Article"
@@ -453,12 +342,7 @@ export function StockDashboardClient({
                     <div className="py-4 text-center">
                       <p className="text-xs text-muted mb-3">No color variants yet.</p>
                       <button
-                        onClick={() => {
-                          setShowAddColorModal(p.id);
-                          setAddColorName("");
-                          setAddColorStock("10");
-                          setAddColorError(null);
-                        }}
+                        onClick={() => dispatch({ type: "ADD_COLOR_MODAL_OPEN", catalogId: p.id })}
                         className="px-4 py-2 bg-ink hover:bg-stone-900 text-paper rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 mx-auto"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -474,7 +358,6 @@ export function StockDashboardClient({
                         const isSuccess = successIds[c.id] || false;
                         const isError = errorIds[c.id] || null;
                         const inputVal = editingStock[c.id];
-                        const displayStock = inputVal !== undefined ? inputVal : c.stock;
                         const isLowStock = c.stock <= 2;
                         const isOutOfStock = c.stock === 0;
 
@@ -499,13 +382,13 @@ export function StockDashboardClient({
                                 />
                               ) : (
                                 <span className="inline-block w-6 h-6 rounded-full border border-stone/50 shadow-inner" style={{
-                                  backgroundColor: c.color_name.toLowerCase() === "white" ? "#ffffff" : 
+                                  backgroundColor: c.color_name.toLowerCase() === "white" ? "#ffffff" :
                                                    c.color_name.toLowerCase() === "black" ? "#000000" :
-                                                   c.color_name.toLowerCase() === "blue" ? "#0000ff" : 
+                                                   c.color_name.toLowerCase() === "blue" ? "#0000ff" :
                                                    c.color_name.toLowerCase() === "red" ? "#ff0000" :
                                                    c.color_name.toLowerCase() === "green" ? "#008000" :
                                                    c.color_name.toLowerCase() === "beige" ? "#f5f5dc" :
-                                                   c.color_name.toLowerCase() === "gray" || c.color_name.toLowerCase() === "grey" ? "#808080" : 
+                                                   c.color_name.toLowerCase() === "gray" || c.color_name.toLowerCase() === "grey" ? "#808080" :
                                                    "#dddddd"
                                 }} />
                               )}
@@ -541,15 +424,13 @@ export function StockDashboardClient({
                                     disabled={isSaving}
                                     onClick={() => {
                                       const currentVal = editingStock[c.id] !== undefined ? editingStock[c.id] : c.stock;
-                                      const newVal = Math.max(0, currentVal - 1);
-                                      handleStockInputChange(c.id, newVal.toString());
+                                      handleStockInputChange(c.id, String(Math.max(0, currentVal - 1)));
                                     }}
                                     className="w-8 h-7 flex items-center justify-center text-stone-500 hover:text-ink hover:bg-stone-50 border-r border-stone active:bg-stone-100 disabled:opacity-50 transition-colors shrink-0 cursor-pointer text-xs font-semibold"
                                   >
                                     -
                                   </button>
 
-                                  {/* Centered borderless input */}
                                   <input
                                     type="number"
                                     min="0"
@@ -567,8 +448,7 @@ export function StockDashboardClient({
                                     disabled={isSaving}
                                     onClick={() => {
                                       const currentVal = editingStock[c.id] !== undefined ? editingStock[c.id] : c.stock;
-                                      const newVal = currentVal + 1;
-                                      handleStockInputChange(c.id, newVal.toString());
+                                      handleStockInputChange(c.id, String(currentVal + 1));
                                     }}
                                     className="w-8 h-7 flex items-center justify-center text-stone-500 hover:text-ink hover:bg-stone-50 border-l border-stone active:bg-stone-100 disabled:opacity-50 transition-colors shrink-0 cursor-pointer text-xs font-semibold"
                                   >
@@ -620,331 +500,34 @@ export function StockDashboardClient({
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white border border-stone rounded-xl shadow-lg max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-6">
-              <div className="flex items-center gap-3 text-red-600 mb-2">
-                <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <h4 className="font-semibold text-ink text-lg">Confirm Deletion</h4>
-              </div>
-              <p className="text-sm text-muted">
-                Are you sure you want to permanently delete this product? This action will:
-              </p>
-              <ul className="list-disc list-inside text-xs text-muted mt-2 space-y-1 ml-1">
-                <li>Permanently remove it from the product catalog.</li>
-                <li>Delete it from the Supabase database.</li>
-                <li>Cascade and delete all color variations and stock records.</li>
-                <li>Send an administrative alert email notification.</li>
-              </ul>
-              <p className="text-xs font-bold text-red-600 mt-3">
-                This action is irreversible.
-              </p>
-            </div>
-            <div className="bg-stone-50 px-6 py-4 flex justify-end gap-3 border-t border-stone">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(null)}
-                disabled={isDeletingProductId !== null}
-                id="cancel-delete-btn"
-                className="px-4 py-2 text-xs font-medium text-ink bg-white border border-stone rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => localProducts.find(p => p.id === showDeleteConfirm) && handleDeleteProduct(showDeleteConfirm)}
-                disabled={isDeletingProductId !== null}
-                id="confirm-delete-btn"
-                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
-              >
-                {isDeletingProductId !== null ? "Deleting..." : "Permanently Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmModal
+        productId={showDeleteConfirm}
+        isDeleting={isDeletingProductId !== null}
+        onConfirm={handleDeleteProduct}
+        onClose={() => dispatch({ type: "DELETE_CONFIRM_CLOSE" })}
+      />
 
-      {/* Add Color Modal */}
-      {showAddColorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white border border-stone rounded-xl shadow-lg max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 border-b border-stone flex justify-between items-center bg-stone-50/50">
-              <h4 className="font-semibold text-ink text-base">Add Color Variant</h4>
-              <button
-                onClick={() => setShowAddColorModal(null)}
-                className="text-stone-400 hover:text-ink transition-colors cursor-pointer"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      <AddColorModal
+        catalogId={showAddColorModal}
+        addColorName={addColorName}
+        addColorStock={addColorStock}
+        isSubmittingColor={isSubmittingColor}
+        addColorError={addColorError}
+        dispatch={dispatch}
+        onSubmit={() => showAddColorModal && handleAddColor(showAddColorModal)}
+        onClose={() => dispatch({ type: "ADD_COLOR_MODAL_CLOSE" })}
+      />
 
-            <div className="p-6 space-y-4">
-              {addColorError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded-lg font-medium">
-                  ⚠️ {addColorError}
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-ink">Color Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Navy Blue"
-                  value={addColorName}
-                  onChange={(e) => setAddColorName(e.target.value)}
-                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-ink">Initial Stock</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="10"
-                  value={addColorStock}
-                  onChange={(e) => setAddColorStock(e.target.value)}
-                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddColorModal(null)}
-                  disabled={isSubmittingColor}
-                  className="px-4 py-2 text-xs font-medium text-ink bg-white border border-stone rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddColor(showAddColorModal)}
-                  disabled={isSubmittingColor}
-                  className="px-4 py-2 text-xs font-bold text-paper bg-ink hover:bg-stone-900 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
-                >
-                  {isSubmittingColor ? "Adding..." : "Add Color"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Fabric Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white border border-stone rounded-xl shadow-lg max-w-lg w-full my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 border-b border-stone flex justify-between items-center bg-stone-50/50">
-              <h4 className="font-semibold text-ink text-base">Create Fabric Article</h4>
-              <button
-                onClick={() => setShowAddModal(false)}
-                id="close-add-modal-btn"
-                className="text-stone-400 hover:text-ink transition-colors cursor-pointer"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProductSubmit} className="p-6 space-y-4">
-              {addError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-3 rounded-lg font-medium">
-                  ⚠️ {addError}
-                </div>
-              )}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Name */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">Fabric Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Imperial Cotton"
-                    value={addFormName}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                    id="new-product-name"
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                  />
-                </div>
-
-                {/* Slug */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">Slug / Identifier</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. imperial-cotton"
-                    value={addFormSlug}
-                    onChange={(e) => setAddFormSlug(e.target.value)}
-                    id="new-product-slug"
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white font-mono focus:border-ink focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Category */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">Category</label>
-                  <select
-                    value={addFormCategory}
-                    onChange={(e) => setAddFormCategory(e.target.value)}
-                    id="new-product-category"
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors cursor-pointer"
-                  >
-                    <option value="cotton">Cotton</option>
-                    <option value="linen">Linen</option>
-                    <option value="wool">Wool</option>
-                    <option value="silk">Silk</option>
-                    <option value="blended">Blended</option>
-                  </select>
-                </div>
-
-                {/* Price */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">Suit Price (PKR)</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    placeholder="e.g. 7500"
-                    value={addFormPrice}
-                    onChange={(e) => setAddFormPrice(e.target.value)}
-                    id="new-product-price"
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Composition */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-ink">Composition</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 100% Egyptian Giza Cotton"
-                  value={addFormComposition}
-                  onChange={(e) => setAddFormComposition(e.target.value)}
-                  id="new-product-composition"
-                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-ink">Description</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Describe the fabric's look, texture, feel, and recommended season..."
-                  value={addFormDescription}
-                  onChange={(e) => setAddFormDescription(e.target.value)}
-                  id="new-product-description"
-                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors resize-none"
-                />
-              </div>
-
-              {/* Fabric Image (optional) */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-ink">
-                  Fabric Image <span className="font-normal text-muted">(optional)</span>
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    setAddFormImageFile(file);
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setAddFormImagePreview(ev.target?.result as string);
-                      reader.readAsDataURL(file);
-                    } else {
-                      setAddFormImagePreview(null);
-                    }
-                  }}
-                  className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors cursor-pointer file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-stone-100 file:text-ink file:cursor-pointer"
-                />
-                {addFormImagePreview && (
-                  <div className="mt-2 relative w-20 h-20 border border-stone rounded overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={addFormImagePreview} alt="preview" className="w-full h-full object-cover" />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Weave Type (optional) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">
-                    Weave Type <span className="font-normal text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Plain, Twill, Satin"
-                    value={addFormWeaveType}
-                    onChange={(e) => setAddFormWeaveType(e.target.value)}
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                  />
-                </div>
-
-                {/* Thread Count (optional) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-ink">
-                    Thread Count <span className="font-normal text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 120"
-                    value={addFormThreadCount}
-                    onChange={(e) => setAddFormThreadCount(e.target.value)}
-                    className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Info notice about default colors */}
-              <div className="bg-stone-50 border border-stone/50 rounded-lg p-3 text-xs text-muted flex items-start gap-2">
-                <svg className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <span className="font-semibold text-ink">Note:</span> Creating this article will automatically seed default <strong>White</strong> and <strong>Black</strong> color variations, each with an initial stock level of <strong>10</strong> to simplify catalog setup.
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  disabled={isSubmittingAdd}
-                  id="cancel-add-btn"
-                  className="px-4 py-2 text-xs font-medium text-ink bg-white border border-stone rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingAdd}
-                  id="submit-add-btn"
-                  className="px-4 py-2 text-xs font-bold text-paper bg-ink hover:bg-stone-900 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 active:scale-95"
-                >
-                  {isUploadingImage ? "Uploading image…" : isSubmittingAdd ? "Creating..." : "Create Product"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AddProductModal
+          addForm={addForm}
+          isUploadingImage={isUploadingImage}
+          isSubmittingAdd={isSubmittingAdd}
+          addError={addError}
+          dispatch={dispatch}
+          onSubmit={handleCreateProductSubmit}
+          onClose={() => dispatch({ type: "ADD_MODAL_CLOSE" })}
+        />
       )}
     </div>
   );
