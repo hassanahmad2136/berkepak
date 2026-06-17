@@ -41,6 +41,11 @@ export interface StockState {
   addColorError: string | null;
   // Remove color
   removingColorId: string | null;
+  // Product images
+  productImages: Record<string, string[]>;
+  imageUploading: Record<string, boolean>;
+  imageRemoving: Record<string, boolean>;
+  imageErrors: Record<string, string | null>;
 }
 
 const defaultAddForm: AddFormState = {
@@ -96,7 +101,14 @@ export type StockAction =
   | { type: "ADD_COLOR_SET_ERROR"; error: string | null }
   // Remove color
   | { type: "COLOR_REMOVE_START"; colorId: string }
-  | { type: "COLOR_REMOVE_DONE"; colorId: string };
+  | { type: "COLOR_REMOVE_DONE"; colorId: string }
+  // Product images
+  | { type: "IMAGE_UPLOAD_START"; productId: string }
+  | { type: "IMAGE_UPLOAD_DONE"; productId: string; imageUrl: string }
+  | { type: "IMAGE_UPLOAD_ERROR"; productId: string; error: string }
+  | { type: "IMAGE_REMOVE_START"; productId: string; imageUrl: string }
+  | { type: "IMAGE_REMOVE_DONE"; productId: string; imageUrl: string }
+  | { type: "IMAGE_REMOVE_ERROR"; productId: string; imageUrl: string; error: string };
 
 export function stockReducer(state: StockState, action: StockAction): StockState {
   switch (action.type) {
@@ -281,6 +293,56 @@ export function stockReducer(state: StockState, action: StockAction): StockState
         colors: state.colors.filter((c) => c.id !== action.colorId),
       };
 
+    // --- Product images ---
+    case "IMAGE_UPLOAD_START":
+      return {
+        ...state,
+        imageUploading: { ...state.imageUploading, [action.productId]: true },
+        imageErrors: { ...state.imageErrors, [action.productId]: null },
+      };
+
+    case "IMAGE_UPLOAD_DONE": {
+      const prev = state.productImages[action.productId] ?? [];
+      return {
+        ...state,
+        imageUploading: { ...state.imageUploading, [action.productId]: false },
+        productImages: { ...state.productImages, [action.productId]: [...prev, action.imageUrl] },
+      };
+    }
+
+    case "IMAGE_UPLOAD_ERROR":
+      return {
+        ...state,
+        imageUploading: { ...state.imageUploading, [action.productId]: false },
+        imageErrors: { ...state.imageErrors, [action.productId]: action.error },
+      };
+
+    case "IMAGE_REMOVE_START":
+      return {
+        ...state,
+        imageRemoving: { ...state.imageRemoving, [action.productId + action.imageUrl]: true },
+        imageErrors: { ...state.imageErrors, [action.productId]: null },
+      };
+
+    case "IMAGE_REMOVE_DONE": {
+      const prev = state.productImages[action.productId] ?? [];
+      return {
+        ...state,
+        imageRemoving: { ...state.imageRemoving, [action.productId + action.imageUrl]: false },
+        productImages: {
+          ...state.productImages,
+          [action.productId]: prev.filter((u) => u !== action.imageUrl),
+        },
+      };
+    }
+
+    case "IMAGE_REMOVE_ERROR":
+      return {
+        ...state,
+        imageRemoving: { ...state.imageRemoving, [action.productId + action.imageUrl]: false },
+        imageErrors: { ...state.imageErrors, [action.productId]: action.error },
+      };
+
     default:
       return state;
   }
@@ -290,6 +352,10 @@ export function initialStockState(
   products: ProductItem[],
   colors: ProductColor[]
 ): StockState {
+  const productImages: Record<string, string[]> = {};
+  for (const p of products) {
+    productImages[p.id] = p.images ?? [];
+  }
   return {
     localProducts: products,
     colors,
@@ -312,5 +378,9 @@ export function initialStockState(
     isSubmittingColor: false,
     addColorError: null,
     removingColorId: null,
+    productImages,
+    imageUploading: {},
+    imageRemoving: {},
+    imageErrors: {},
   };
 }

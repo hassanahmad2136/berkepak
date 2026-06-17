@@ -230,6 +230,7 @@ export async function getAdminProductsWithVisibility(): Promise<{
     price: number;
     variantId: string;
     available: boolean;
+    images: string[];
   }>;
   error?: string;
 }> {
@@ -239,7 +240,7 @@ export async function getAdminProductsWithVisibility(): Promise<{
   const admin = createSupabaseAdmin();
   const { data, error } = await admin
     .from("product_catalog")
-    .select("id, name, slug, price_per_suit, is_active")
+    .select("id, name, slug, price_per_suit, is_active, images")
     .order("name", { ascending: true });
 
   if (error) return { ok: false, error: error.message };
@@ -252,9 +253,76 @@ export async function getAdminProductsWithVisibility(): Promise<{
     price: row.price_per_suit as number,
     variantId: row.id as string,
     available: row.is_active as boolean,
+    images: (row.images as string[]) ?? [],
   }));
 
   return { ok: true, products };
+}
+
+export async function adminAddProductImage(
+  productId: string,
+  imageUrl: string,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  const { data, error: fetchErr } = await admin
+    .from("product_catalog")
+    .select("images")
+    .eq("id", productId)
+    .single();
+  if (fetchErr) return { ok: false, error: fetchErr.message };
+
+  const current: string[] = (data?.images as string[]) ?? [];
+  const updated = [...current, imageUrl];
+
+  const { error } = await admin
+    .from("product_catalog")
+    .update({ images: updated })
+    .eq("id", productId);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true };
+}
+
+export async function adminRemoveProductImage(
+  productId: string,
+  imageUrl: string,
+): Promise<AdminResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+
+  const admin = createSupabaseAdmin();
+  const { data, error: fetchErr } = await admin
+    .from("product_catalog")
+    .select("images")
+    .eq("id", productId)
+    .single();
+  if (fetchErr) return { ok: false, error: fetchErr.message };
+
+  const current: string[] = (data?.images as string[]) ?? [];
+  const updated = current.filter((u) => u !== imageUrl);
+
+  const { error } = await admin
+    .from("product_catalog")
+    .update({ images: updated })
+    .eq("id", productId);
+  if (error) return { ok: false, error: error.message };
+
+  // Best-effort storage delete — extract path from public URL
+  try {
+    const url = new URL(imageUrl);
+    const bucketPrefix = "/storage/v1/object/public/product-images/";
+    if (url.pathname.startsWith(bucketPrefix)) {
+      const storagePath = url.pathname.slice(bucketPrefix.length);
+      await admin.storage.from("product-images").remove([storagePath]);
+    }
+  } catch {
+    // Non-fatal — URL may be external or path extraction failed
+  }
+
+  return { ok: true };
 }
 
 export async function updateProductColorStock(

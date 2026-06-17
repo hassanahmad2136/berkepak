@@ -8,6 +8,8 @@ import {
   adminDeleteProduct,
   addProductColor,
   removeProductColor,
+  adminAddProductImage,
+  adminRemoveProductImage,
 } from "@/lib/actions/admin";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { stockReducer, initialStockState } from "./stockReducer";
@@ -35,6 +37,7 @@ export function StockDashboardClient({
     showAddModal, addForm, isUploadingImage, isSubmittingAdd, addError,
     showAddColorModal, addColorName, addColorStock, isSubmittingColor, addColorError,
     removingColorId,
+    productImages, imageUploading, imageRemoving, imageErrors,
   } = state;
 
   useEffect(() => {
@@ -200,6 +203,46 @@ export function StockDashboardClient({
     }
   };
 
+  const handleUploadImage = async (productId: string, file: File) => {
+    dispatch({ type: "IMAGE_UPLOAD_START", productId });
+    try {
+      const supabase = createSupabaseBrowser();
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${productId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("product-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (uploadErr) {
+        dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: `Upload failed: ${uploadErr.message}` });
+        return;
+      }
+      const { data: { publicUrl } } = supabase.storage.from("product-images").getPublicUrl(path);
+      const res = await adminAddProductImage(productId, publicUrl);
+      if (res.ok) {
+        dispatch({ type: "IMAGE_UPLOAD_DONE", productId, imageUrl: publicUrl });
+      } else {
+        dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: res.error || "Failed to save image." });
+      }
+    } catch (err: unknown) {
+      dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: err instanceof Error ? err.message : "Unexpected error." });
+    }
+  };
+
+  const handleRemoveImage = async (productId: string, imageUrl: string) => {
+    if (!confirm("Remove this image?")) return;
+    dispatch({ type: "IMAGE_REMOVE_START", productId, imageUrl });
+    try {
+      const res = await adminRemoveProductImage(productId, imageUrl);
+      if (res.ok) {
+        dispatch({ type: "IMAGE_REMOVE_DONE", productId, imageUrl });
+      } else {
+        dispatch({ type: "IMAGE_REMOVE_ERROR", productId, imageUrl, error: res.error || "Failed to remove image." });
+      }
+    } catch (err: unknown) {
+      dispatch({ type: "IMAGE_REMOVE_ERROR", productId, imageUrl, error: err instanceof Error ? err.message : "Unexpected error." });
+    }
+  };
+
   const handleRemoveColor = async (colorId: string) => {
     if (!confirm("Remove this color variant? This cannot be undone.")) return;
     dispatch({ type: "COLOR_REMOVE_START", colorId });
@@ -334,6 +377,64 @@ export function StockDashboardClient({
                       </svg>
                     </button>
                   </div>
+                </div>
+
+                {/* Product Images */}
+                <div className="px-6 py-4 border-b border-stone bg-white">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                      Product Images ({(productImages[p.id] ?? []).length})
+                    </p>
+                    <label className="cursor-pointer px-3 py-1.5 bg-ink hover:bg-stone-900 text-paper rounded text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                      </svg>
+                      {imageUploading[p.id] ? "Uploading…" : "Add Image"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="sr-only"
+                        disabled={imageUploading[p.id]}
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files ?? []);
+                          for (const file of files) {
+                            await handleUploadImage(p.id, file);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {imageErrors[p.id] && (
+                    <p className="text-xs text-red-600 mb-2">{imageErrors[p.id]}</p>
+                  )}
+
+                  {(productImages[p.id] ?? []).length === 0 ? (
+                    <p className="text-xs text-muted italic">No images yet. Upload fabric photos above.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-3">
+                      {(productImages[p.id] ?? []).map((url, idx) => {
+                        const isRemoving = imageRemoving[p.id + url];
+                        return (
+                          <div key={url} className="relative group w-20 h-20 rounded border border-stone overflow-hidden shadow-xs">
+                            <img src={url} alt={`${p.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => handleRemoveImage(p.id, url)}
+                              disabled={isRemoving}
+                              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                              title="Remove image"
+                            >
+                              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Colors Grid for Product */}

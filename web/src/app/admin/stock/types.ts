@@ -6,6 +6,7 @@ export interface ProductItem {
   price: number;
   variantId: string;
   available: boolean;
+  images: string[];
 }
 
 export interface ProductColor {
