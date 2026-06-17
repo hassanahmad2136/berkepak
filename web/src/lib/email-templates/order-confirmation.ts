@@ -66,9 +66,8 @@ export function buildOrderConfirmationEmail(order: OrderData, items: OrderItem[]
         <p style="margin: 0 0 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #9b9b8a; font-weight: 600;">Bank Transfer Details</p>
         <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
           <tr><td style="padding: 4px 0; color: #6b6b63; width: 140px;">Bank</td><td style="padding: 4px 0; color: #1a1a1a;">Meezan Bank</td></tr>
-          <tr><td style="padding: 4px 0; color: #6b6b63;">Account Title</td><td style="padding: 4px 0; color: #1a1a1a;">Berke Pak Fabrics (Pvt) Ltd</td></tr>
-          <tr><td style="padding: 4px 0; color: #6b6b63;">IBAN</td><td style="padding: 4px 0; color: #1a1a1a; font-family: monospace;">PK00MEZN0000000000000000</td></tr>
-          <tr><td style="padding: 4px 0; color: #6b6b63;">Raast ID</td><td style="padding: 4px 0; color: #1a1a1a; font-family: monospace;">03000000000</td></tr>
+          <tr><td style="padding: 4px 0; color: #6b6b63;">Account Title</td><td style="padding: 4px 0; color: #1a1a1a;">BZ Enterprises</td></tr>
+          <tr><td style="padding: 4px 0; color: #6b6b63;">Account Number</td><td style="padding: 4px 0; color: #1a1a1a; font-family: monospace;">02140102913486</td></tr>
         </table>
         <p style="margin: 16px 0 0; font-size: 12px; color: #6b6b63; line-height: 1.6;">
           Please transfer <strong style="color: #1a1a1a;">${pkr(order.total)}</strong> using the details above, then upload your receipt screenshot from your account dashboard or via WhatsApp.

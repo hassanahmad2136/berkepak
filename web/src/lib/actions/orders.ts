@@ -181,8 +181,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   revalidatePath("/account/orders");
 
-  // Send confirmation immediately for COD. Bank transfer waits for admin receipt approval.
-  if (userData.user.email && validInput.paymentMethod !== "bank_transfer") {
+  // COD: confirmed immediately. Bank transfer: send payment instructions email.
+  if (userData.user.email) {
     try {
       await sendOrderConfirmationEmail(orderId, userData.user.email);
     } catch (err) {

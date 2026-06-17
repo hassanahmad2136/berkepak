@@ -615,11 +615,9 @@ function Confirmation({
             <dt className="text-muted">Bank</dt>
             <dd>Meezan Bank</dd>
             <dt className="text-muted">Account Title</dt>
-            <dd>Berke Pak Fabrics (Pvt) Ltd</dd>
-            <dt className="text-muted">IBAN</dt>
-            <dd className="font-mono">{process.env.NEXT_PUBLIC_BANK_IBAN ?? 'Contact us at info@berkepakfabrics.com for bank details'}</dd>
-            <dt className="text-muted">Raast ID</dt>
-            <dd>03000000000</dd>
+            <dd>BZ Enterprises</dd>
+            <dt className="text-muted">Account Number</dt>
+            <dd className="font-mono">02140102913486</dd>
           </dl>
           
           <div className="mt-8 border-t border-stone pt-6">
