@@ -36,9 +36,14 @@ export async function sendOrderConfirmationEmail(
     rawItems as Parameters<typeof buildOrderConfirmationEmail>[1],
   );
 
+  const subject =
+    order.payment_method === "bank_transfer"
+      ? `Order Received — Upload Receipt to Confirm | Berke Pak`
+      : `Order Confirmed — ${orderId} | Berke Pak`;
+
   await sendEmail({
     to: userEmail,
-    subject: `Order Confirmed — ${orderId} | Berke Pak`,
+    subject,
     html,
   });
 }
