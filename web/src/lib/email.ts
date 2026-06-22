@@ -22,7 +22,7 @@ export async function sendEmail({
   text?: string;
 }): Promise<void> {
   await transporter.sendMail({
-    from: `"Berke Pak" <${process.env.SMTP_USER}>`,
+    from: `"Berke Pak" <${process.env.SMTP_FROM ?? process.env.SMTP_USER}>`,
     to,
     subject,
     html,
