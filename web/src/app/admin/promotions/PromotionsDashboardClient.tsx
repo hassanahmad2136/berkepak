@@ -226,7 +226,7 @@ export function PromotionsDashboardClient({ promotions: initial, fetchError }: P
                 <input
                   required
                   type="text"
-                  placeholder={formType === "banner" ? "e.g. Eid Special — 15% off all wool fabrics" : "e.g. Summer Sale"}
+                  placeholder={formType === "banner" ? "e.g. Eid Special — 15% off all suits" : "e.g. Summer Sale"}
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"

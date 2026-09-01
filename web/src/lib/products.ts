@@ -42,7 +42,7 @@ function mapRow(row: CatalogRow): Product {
     id:               row.id,
     slug:             row.slug,
     name:             row.name,
-    category:         (row.category?.toLowerCase() ?? "cotton") as Product["category"],
+    category:         row.category?.toLowerCase() ?? "fabric",
     weave:            (row.weave_type?.toLowerCase() ?? "plain") as Product["weave"],
     gsm:              row.gsm ?? 0,
     threadCount:      row.thread_count ?? undefined,

@@ -48,10 +48,13 @@ export interface StockState {
   imageErrors: Record<string, string | null>;
 }
 
+/** Single storefront category — material categories (cotton/linen/wool…) were retired. */
+export const DEFAULT_PRODUCT_CATEGORY = "fabric";
+
 const defaultAddForm: AddFormState = {
   name: "",
   slug: "",
-  category: "cotton",
+  category: DEFAULT_PRODUCT_CATEGORY,
   price: "",
   composition: "",
   description: "",

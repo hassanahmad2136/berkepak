@@ -72,7 +72,7 @@ export default async function ProductPage(props: {
 
   const [allProducts, campaigns] = await Promise.all([getProducts(), getActiveCampaigns()]);
   const related = allProducts
-    .filter((p) => p.id !== product.id && p.category === product.category)
+    .filter((p) => p.id !== product.id)
     .slice(0, 4);
 
   const activeCampaign = getCampaignForProduct(product.id, product.category, campaigns);
@@ -87,7 +87,7 @@ export default async function ProductPage(props: {
         <span className="mx-2">/</span>
         <Link href="/shop" className="link-underline">Shop</Link>
         <span className="mx-2">/</span>
-        <span className="capitalize">{product.category}</span>
+        <span>{product.name}</span>
       </nav>
 
       <ProductInteractiveClient product={product} colors={dbColors} discount={discount} />

@@ -6,6 +6,7 @@ import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
 import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import { getProductByIdAsync } from "@/lib/products";
 import { formatPKR } from "@/lib/format";
+import { fabricImage } from "@/lib/placeholder";
 import { useEffect, useState } from "react";
 import type { Product } from "@/lib/types";
 
@@ -117,7 +118,7 @@ export function CartDrawer() {
                       className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden bg-mist"
                     >
                       <Image
-                        src={product.images[0]}
+                        src={fabricImage(product.images[0])}
                         alt={product.name}
                         fill
                         sizes="96px"

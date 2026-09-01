@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatPKR } from "@/lib/format";
+import { fabricImage } from "@/lib/placeholder";
 
 interface SearchableProduct {
   id: string;
   name: string;
   slug: string;
-  category: string;
+  category?: string;
   weave: string;
   composition: string;
   pricePerSuit: number;
@@ -21,14 +22,6 @@ interface SearchOverlayProps {
   onClose: () => void;
   products: SearchableProduct[];
 }
-
-const CATEGORIES = [
-  { slug: "cotton", label: "Cotton" },
-  { slug: "linen", label: "Linen" },
-  { slug: "wool", label: "Wool" },
-  { slug: "silk", label: "Silk" },
-  { slug: "blended", label: "Blended" },
-];
 
 export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps) {
   const [query, setQuery] = useState("");
@@ -69,21 +62,11 @@ export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps)
 
   const normalizedQuery = query.trim().toLowerCase();
 
-  // Predictive Matching logic
-  const matchedCategories = normalizedQuery
-    ? CATEGORIES.filter(
-        (c) =>
-          c.slug.includes(normalizedQuery) ||
-          c.label.toLowerCase().includes(normalizedQuery)
-      )
-    : [];
-
   const matchedProducts = normalizedQuery
     ? products.filter(
         (p) =>
           p.name.toLowerCase().includes(normalizedQuery) ||
           p.composition.toLowerCase().includes(normalizedQuery) ||
-          p.category.toLowerCase().includes(normalizedQuery) ||
           p.weave.toLowerCase().includes(normalizedQuery)
       )
     : [];
@@ -127,44 +110,8 @@ export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps)
         </div>
 
         {/* Dynamic results layout */}
-        <div className="mt-10 flex-1 grid gap-8 md:grid-cols-[220px_1fr]">
-          {/* Left panel: Suggested categories */}
-          <aside className="border-r border-stone/20 pr-4 md:block hidden min-h-[300px]">
-            <p className="eyebrow text-muted text-[11px] mb-4">Categories</p>
-            {matchedCategories.length > 0 ? (
-              <ul className="space-y-2">
-                {matchedCategories.map((c) => (
-                  <li key={c.slug}>
-                    <Link
-                      href={`/shop?category=${c.slug}`}
-                      onClick={onClose}
-                      className="inline-block px-3 py-1 text-xs uppercase tracking-[0.14em] border border-stone/60 hover:border-ink rounded-full transition-colors text-ink bg-white"
-                    >
-                      {c.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : query ? (
-              <p className="text-xs text-muted">No category matches.</p>
-            ) : (
-              <ul className="space-y-3">
-                {CATEGORIES.map((c) => (
-                  <li key={c.slug}>
-                    <Link
-                      href={`/shop?category=${c.slug}`}
-                      onClick={onClose}
-                      className="link-underline text-xs uppercase tracking-[0.12em] text-ink-soft hover:text-ink"
-                    >
-                      {c.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-
-          {/* Right panel: Fabric details matches */}
+        <div className="mt-10 flex-1">
+          {/* Fabric detail matches */}
           <main className="flex-1">
             <p className="eyebrow text-muted text-[11px] mb-4">
               {query ? `Matches (${matchedProducts.length})` : "Featured Fabrics"}
@@ -181,9 +128,9 @@ export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps)
                     className="flex gap-4 p-3 border border-stone/30 bg-white hover:border-stone-500 hover:shadow-xs transition-all duration-300"
                   >
                     <div className="relative aspect-[3/4] w-14 shrink-0 bg-mist overflow-hidden">
-                      {p.image ? (
+                      {p.image !== undefined ? (
                         <Image
-                          src={p.image}
+                          src={fabricImage(p.image)}
                           alt={p.name}
                           fill
                           sizes="56px"
@@ -212,7 +159,7 @@ export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps)
                   No fabrics found.
                 </p>
                 <p className="text-sm text-muted mt-2">
-                  Try adjusting spelling or searching for materials like "cotton", "silk", or "wool".
+                  Try a different spelling, or search by fabric name or weave.
                 </p>
               </div>
             ) : (
@@ -226,9 +173,9 @@ export function SearchOverlay({ isOpen, onClose, products }: SearchOverlayProps)
                     className="flex gap-4 p-3 border border-stone/30 bg-white hover:border-stone-500 hover:shadow-xs transition-all duration-300 fade-up"
                   >
                     <div className="relative aspect-[3/4] w-16 shrink-0 bg-mist overflow-hidden">
-                      {p.image ? (
+                      {p.image !== undefined ? (
                         <Image
-                          src={p.image}
+                          src={fabricImage(p.image)}
                           alt={p.name}
                           fill
                           sizes="64px"

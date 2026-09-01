@@ -15,11 +15,11 @@ export function Footer() {
             className="mb-6 h-10 w-auto"
           />
           <p className="display text-2xl tracking-[-0.03em]">
-            Editorial fabrics, woven with intent.
+            Unstitched fabric, woven with intent.
           </p>
           <p className="mt-4 max-w-md text-sm text-muted">
-            Berke Pak sources and supplies premium raw fabrics — by the meter
-            or by the suit — from heritage mills across Pakistan and beyond.
+            Berke Pak supplies premium men&apos;s unstitched shalwar kameez fabric,
+            sold by the suit, from heritage mills across Pakistan.
           </p>
           <NewsletterForm />
         </div>
@@ -27,10 +27,6 @@ export function Footer() {
           <p className="eyebrow text-muted">Shop</p>
           <ul className="mt-4 space-y-2 text-sm">
             <li><Link className="link-underline" href="/shop">All Fabrics</Link></li>
-            <li><Link className="link-underline" href="/shop?category=cotton">Cotton</Link></li>
-            <li><Link className="link-underline" href="/shop?category=linen">Linen</Link></li>
-            <li><Link className="link-underline" href="/shop?category=wool">Wool</Link></li>
-            <li><Link className="link-underline" href="/shop?category=silk">Silk</Link></li>
           </ul>
         </div>
         <div>

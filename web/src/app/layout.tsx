@@ -23,11 +23,11 @@ const bodyFont = Hanken_Grotesk({
 
 export const metadata: Metadata = {
   title: {
-    default: "Berke Pak — Editorial Fabrics from Pakistan",
+    default: "Berke Pak — Men's Unstitched Shalwar Kameez Fabric",
     template: "%s — Berke Pak",
   },
   description:
-    "Premium raw fabrics — cotton, linen, wool, and silk — sold exclusively by the suit. Crafted in Pakistan, delivered worldwide.",
+    "Premium men's unstitched shalwar kameez fabric, sold by the suit. Crafted in Pakistan, delivered worldwide.",
   icons: {
     icon: "/logo.png?v=1",
     shortcut: "/logo.png?v=1",

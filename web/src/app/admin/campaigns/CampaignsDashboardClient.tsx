@@ -10,8 +10,9 @@ import {
 } from "@/lib/actions/campaigns";
 import type { CampaignRecord, ProductPickerItem } from "./page";
 
-const CATEGORIES = ["cotton", "linen", "wool", "silk", "blended"] as const;
-type Category = (typeof CATEGORIES)[number];
+// Material categories were retired from the storefront; legacy campaigns may still
+// carry category targets, so the type stays open for reading existing rows.
+type Category = string;
 
 interface Props {
   campaigns: CampaignRecord[];
@@ -106,8 +107,7 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
       products.filter(
         (p) =>
           !productSearch ||
-          p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-          p.category.toLowerCase().includes(productSearch.toLowerCase()),
+          p.name.toLowerCase().includes(productSearch.toLowerCase()),
       ),
     [products, productSearch],
   );
@@ -136,14 +136,6 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
 
   const setField = <K extends keyof FormState>(key: K, val: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: val }));
-
-  const toggleCategory = (cat: Category) =>
-    setField(
-      "categoryTargets",
-      form.categoryTargets.includes(cat)
-        ? form.categoryTargets.filter((c) => c !== cat)
-        : [...form.categoryTargets, cat],
-    );
 
   const toggleProduct = (id: string) =>
     setField(
@@ -420,7 +412,7 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-ink">Applies to</label>
                   <div className="flex flex-wrap gap-3 text-sm">
-                    {(["all", "categories", "products"] as const).map((s) => (
+                    {(["all", "products"] as const).map((s) => (
                       <label key={s} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -431,37 +423,12 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
                           className="accent-ink"
                         />
                         <span className="capitalize">
-                          {s === "all" ? "All products" : s === "categories" ? "Specific categories" : "Specific products"}
+                          {s === "all" ? "All products" : "Specific products"}
                         </span>
                       </label>
                     ))}
                   </div>
                 </div>
-
-                {form.scope === "categories" && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-ink">Categories</p>
-                    <div className="flex flex-wrap gap-2">
-                      {CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => toggleCategory(cat)}
-                          className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer capitalize ${
-                            form.categoryTargets.includes(cat)
-                              ? "bg-ink text-paper border-ink"
-                              : "border-stone hover:border-ink"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                    {form.categoryTargets.length === 0 && (
-                      <p className="text-xs text-red-600">Select at least one category.</p>
-                    )}
-                  </div>
-                )}
 
                 {form.scope === "products" && (
                   <div className="space-y-2">
@@ -494,7 +461,6 @@ export function CampaignsDashboardClient({ campaigns: initial, products, fetchEr
                               className="accent-ink shrink-0"
                             />
                             <span className="flex-1 text-xs text-ink truncate">{p.name}</span>
-                            <span className="text-[9px] uppercase text-muted capitalize shrink-0">{p.category}</span>
                           </label>
                         ))
                       )}

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import { FABRIC_PLACEHOLDER, fabricGallery } from "@/lib/placeholder";
 import Link from "next/link";
 import { type Product } from "@/lib/types";
 import { type ProductDiscount } from "@/lib/campaigns";
@@ -39,7 +40,7 @@ export function ProductInteractiveClient({
   const currentStock = selectedColorSpec ? selectedColorSpec.stock : 0;
 
   // Compute dynamic gallery images. Prepend color specific image if it exists.
-  const galleryImages = [...product.images];
+  const galleryImages = fabricGallery(product.images);
   if (selectedColorSpec?.image_url) {
     const url = selectedColorSpec.image_url;
     if (!galleryImages.includes(url)) {
@@ -55,6 +56,17 @@ export function ProductInteractiveClient({
     <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr]">
       {/* Gallery Section */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {galleryImages.length === 0 && (
+          <div className="relative aspect-[4/5] bg-mist overflow-hidden sm:col-span-2">
+            <Image
+              src={FABRIC_PLACEHOLDER}
+              alt={product.name}
+              fill
+              sizes="(min-width: 1024px) 60vw, 100vw"
+              className="object-cover"
+            />
+          </div>
+        )}
         {galleryImages.map((src, i) => (
           <div
             key={src}
@@ -82,7 +94,7 @@ export function ProductInteractiveClient({
 
       {/* Info Details Section */}
       <div className="lg:sticky lg:top-28 lg:self-start">
-        <p className="eyebrow text-muted capitalize">{product.category}</p>
+        <p className="eyebrow text-muted">Unstitched Suit</p>
         <h1 className="display mt-2 text-4xl sm:text-5xl">{product.name}</h1>
 
         <div className="mt-6 flex items-baseline gap-3 flex-wrap">

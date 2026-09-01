@@ -1,5 +1,4 @@
 export type FabricWeave = "plain" | "twill" | "satin" | "jacquard" | "dobby";
-export type FabricCategory = "cotton" | "linen" | "wool" | "silk" | "blended";
 export type SaleUnit = "meter" | "suit";
 export type Stitching = "none" | "bespoke";
 
@@ -9,7 +8,8 @@ export interface Product {
   id: string;
   slug: string;
   name: string;
-  category: FabricCategory;
+  /** Retained for legacy/campaign targeting; no longer surfaced in the storefront. */
+  category: string;
   weave: FabricWeave;
   gsm: number;
   threadCount?: number;

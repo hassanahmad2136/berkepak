@@ -41,7 +41,7 @@ export function HeroSlideshow() {
           >
             <Image
               src={banner.src}
-              alt="Editorial fabric drape"
+              alt=""
               fill
               priority={idx === 0} // Pre-load banner-1.png strictly for LCP optimization
               fetchPriority={idx === 0 ? "high" : "low"}
@@ -67,7 +67,7 @@ export function HeroSlideshow() {
           isDark ? "text-paper" : "text-ink"
         }`}
       >
-        <p className="eyebrow transition-colors duration-[1000ms]">Spring Edit · Volume IV</p>
+        <p className="eyebrow transition-colors duration-[1000ms]">Unstitched · Men&apos;s Shalwar Kameez</p>
         
         <h1 className="display mt-4 text-5xl sm:text-7xl lg:text-8xl max-w-4xl font-light leading-none">
           Quiet luxury,<br />by the suit.
@@ -78,8 +78,8 @@ export function HeroSlideshow() {
             isDark ? "text-paper/85" : "text-ink/85"
           }`}
         >
-          Editorial fabrics for the discerning — sourced from heritage mills,
-          sold without compromise.
+          Men&apos;s unstitched shalwar kameez fabric — sourced from heritage mills,
+          sold by the suit.
         </p>
         
         <div className="mt-8">

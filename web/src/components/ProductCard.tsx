@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { Product } from "@/lib/types";
 import type { ProductDiscount } from "@/lib/campaigns";
 import { formatPKR } from "@/lib/format";
+import { fabricImage, fabricGallery } from "@/lib/placeholder";
 
 interface Props {
   product: Product;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ProductCard({ product, discount }: Props) {
+  const gallery = fabricGallery(product.images);
   return (
     <Link href={`/product/${product.slug}`} className="group block">
       <div
@@ -17,15 +19,15 @@ export function ProductCard({ product, discount }: Props) {
         style={{ viewTransitionName: `product-image-${product.id}` } as React.CSSProperties}
       >
         <Image
-          src={product.images[0]}
+          src={fabricImage(gallery[0])}
           alt={product.name}
           fill
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
         />
-        {product.images[1] && (
+        {gallery[1] && (
           <Image
-            src={product.images[1]}
+            src={gallery[1]}
             alt=""
             fill
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"

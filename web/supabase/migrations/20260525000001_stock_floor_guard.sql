@@ -3,6 +3,11 @@
 -- 2. Returns FALSE if stock is insufficient (instead of silently going negative)
 -- 3. Uses GREATEST(..., 0) as a final safety floor
 
+-- Postgres cannot change a function's return type via CREATE OR REPLACE; the previous
+-- migration created this signature RETURNS void, so drop it first or a fresh
+-- `supabase db reset` fails with SQLSTATE 42P13.
+DROP FUNCTION IF EXISTS public.decrement_product_stock(uuid, text, integer);
+
 CREATE OR REPLACE FUNCTION decrement_product_stock(
   p_product_id UUID,
   p_color_name TEXT,

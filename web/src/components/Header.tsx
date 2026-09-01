@@ -7,10 +7,6 @@ import { isCurrentUserAdmin } from "@/lib/admin";
 
 const NAV_LINKS = [
   { href: "/shop", label: "Shop All" },
-  { href: "/shop?category=cotton", label: "Cotton" },
-  { href: "/shop?category=linen", label: "Linen" },
-  { href: "/shop?category=wool", label: "Wool" },
-  { href: "/shop?category=silk", label: "Silk" },
 ];
 
 export async function Header() {

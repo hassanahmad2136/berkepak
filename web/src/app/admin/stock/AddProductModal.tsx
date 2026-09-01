@@ -62,7 +62,7 @@ export function AddProductModal({
               <input
                 type="text"
                 required
-                placeholder="e.g. Imperial Cotton"
+                placeholder="e.g. Signature Wash"
                 value={addForm.name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 id="new-product-name"
@@ -76,7 +76,7 @@ export function AddProductModal({
               <input
                 type="text"
                 required
-                placeholder="e.g. imperial-cotton"
+                placeholder="e.g. signature-wash"
                 value={addForm.slug}
                 onChange={(e) =>
                   dispatch({ type: "ADD_FORM_FIELD", field: "slug", value: e.target.value })
@@ -87,42 +87,21 @@ export function AddProductModal({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Category */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-ink">Category</label>
-              <select
-                value={addForm.category}
-                onChange={(e) =>
-                  dispatch({ type: "ADD_FORM_FIELD", field: "category", value: e.target.value })
-                }
-                id="new-product-category"
-                className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors cursor-pointer"
-              >
-                <option value="cotton">Cotton</option>
-                <option value="linen">Linen</option>
-                <option value="wool">Wool</option>
-                <option value="silk">Silk</option>
-                <option value="blended">Blended</option>
-              </select>
-            </div>
-
-            {/* Price */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-ink">Suit Price (PKR)</label>
-              <input
-                type="number"
-                required
-                min="0"
-                placeholder="e.g. 7500"
-                value={addForm.price}
-                onChange={(e) =>
-                  dispatch({ type: "ADD_FORM_FIELD", field: "price", value: e.target.value })
-                }
-                id="new-product-price"
-                className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
-              />
-            </div>
+          {/* Price */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-ink">Suit Price (PKR)</label>
+            <input
+              type="number"
+              required
+              min="0"
+              placeholder="e.g. 7500"
+              value={addForm.price}
+              onChange={(e) =>
+                dispatch({ type: "ADD_FORM_FIELD", field: "price", value: e.target.value })
+              }
+              id="new-product-price"
+              className="w-full border border-stone rounded px-3 py-2 text-sm text-ink bg-white focus:border-ink focus:outline-none transition-colors"
+            />
           </div>
 
           {/* Composition */}
@@ -131,7 +110,7 @@ export function AddProductModal({
             <input
               type="text"
               required
-              placeholder="e.g. 100% Egyptian Giza Cotton"
+              placeholder="e.g. 100% Cotton"
               value={addForm.composition}
               onChange={(e) =>
                 dispatch({ type: "ADD_FORM_FIELD", field: "composition", value: e.target.value })
