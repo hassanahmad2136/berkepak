@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/guards";
 import { query } from "@/lib/db";
 import { formatPKR } from "@/lib/format";
 import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/payment-labels";
+import { ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/order-status";
 
 const STATUS_LABEL: Record<string, string> = {
   unconfirmed: "Unconfirmed",
@@ -21,9 +22,11 @@ export default async function OrdersPage() {
     payment_method: string;
     payment_status: string;
     total: string;
+    courier: string | null;
+    tracking_number: string | null;
     created_at: Date;
   }>(
-    `select id, status, payment_method, payment_status, total, created_at
+    `select id, status, payment_method, payment_status, total, courier, tracking_number, created_at
        from orders
       where user_id = $1
       order by created_at desc`,
@@ -55,13 +58,18 @@ export default async function OrdersPage() {
               <p className="text-sm font-medium">{o.id}</p>
               <p className="mt-1 text-xs text-muted">
                 {new Date(o.created_at).toLocaleDateString()} ·{" "}
-                {STATUS_LABEL[o.status] ?? o.status} ·{" "}
+                {ORDER_STATUS_LABEL[o.status as OrderStatus] ?? o.status} ·{" "}
                 {PAYMENT_METHOD_LABEL[o.payment_method] ?? o.payment_method} —{" "}
                 {PAYMENT_STATUS_LABEL[o.payment_status] ?? o.payment_status}
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm">{formatPKR(Number(o.total))}</p>
+              {o.tracking_number && (
+                <p className="mt-1 text-xs text-muted">
+                  {o.courier} <span className="font-mono">{o.tracking_number}</span>
+                </p>
+              )}
               {o.payment_method === "bank_transfer" &&
                 o.payment_status === "awaiting_receipt" && (
                   <Link

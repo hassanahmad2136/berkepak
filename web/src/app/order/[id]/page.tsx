@@ -5,24 +5,21 @@ import { getCurrentUser } from "@/lib/auth/guards";
 import { formatPKR } from "@/lib/format";
 import { SITE } from "@/lib/site";
 import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/payment-labels";
+import {
+  ORDER_FLOW,
+  ORDER_STATUS_BLURB,
+  ORDER_STATUS_LABEL,
+  type OrderStatus,
+} from "@/lib/order-status";
 import { ReceiptUploadForm } from "@/app/account/receipts/ReceiptUploadForm";
 import { PayNowButton } from "@/components/PayNowButton";
 
 /**
  * Order lookup for guests. A guest has no account, so the emailed token is how
  * they return to the order — to send bank-transfer details after the
- * confirmation page is gone, or to retry an online payment. Signed-in owners
- * can open it without a token.
+ * confirmation page is gone, to retry an online payment, or to read their
+ * tracking number. Signed-in owners can open it without a token.
  */
-
-const STATUS_LABEL: Record<string, string> = {
-  unconfirmed: "Unconfirmed",
-  confirmed: "Confirmed",
-  fulfilled: "Fulfilled",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
 
 /**
  * How long an open gateway attempt blocks a new one. A customer who closed the
@@ -40,7 +37,8 @@ export default async function OrderStatusPage(props: {
   const user = await getCurrentUser();
 
   // Either the session owns the order, or the caller holds its guest token.
-  const COLUMNS = `id, status, payment_method, payment_status, total, created_at, guest_token`;
+  const COLUMNS = `id, status, payment_method, payment_status, total, created_at, guest_token,
+                   courier, tracking_number, shipped_at, delivered_at, cancel_reason`;
   type OrderRow = {
     id: string;
     status: string;
@@ -49,6 +47,11 @@ export default async function OrderStatusPage(props: {
     total: string;
     created_at: Date;
     guest_token: string | null;
+    courier: string | null;
+    tracking_number: string | null;
+    shipped_at: Date | null;
+    delivered_at: Date | null;
+    cancel_reason: string | null;
   };
 
   // Every parameter must be referenced or Postgres cannot infer its type, so
@@ -78,6 +81,9 @@ export default async function OrderStatusPage(props: {
     [id],
   );
 
+  const status = order.status as OrderStatus;
+  const reached = ORDER_FLOW.indexOf(status);
+
   const needsReceipt =
     order.payment_method === "bank_transfer" && order.payment_status === "awaiting_receipt";
 
@@ -95,7 +101,8 @@ export default async function OrderStatusPage(props: {
     !!latestAttempt &&
     (latestAttempt.status === "initiated" || latestAttempt.status === "pending") &&
     !latestAttempt.stale;
-  const canPay = isOnline && order.payment_status !== "paid" && !attemptOpen;
+  const canPay =
+    isOnline && order.payment_status !== "paid" && status !== "cancelled" && !attemptOpen;
 
   return (
     <div className="mx-auto max-w-2xl px-4 sm:px-8 py-16">
@@ -103,7 +110,7 @@ export default async function OrderStatusPage(props: {
       <h1 className="display mt-2 text-4xl">{order.id}</h1>
       <p className="mt-3 text-sm text-muted">
         {new Date(order.created_at).toLocaleDateString()} ·{" "}
-        {STATUS_LABEL[order.status] ?? order.status} ·{" "}
+        {ORDER_STATUS_LABEL[status] ?? order.status} ·{" "}
         {PAYMENT_METHOD_LABEL[order.payment_method] ?? order.payment_method} —{" "}
         {PAYMENT_STATUS_LABEL[order.payment_status] ?? order.payment_status}
       </p>
@@ -117,6 +124,49 @@ export default async function OrderStatusPage(props: {
             : order.payment_status === "failed"
               ? "The payment was not completed. You can try again below."
               : "We're confirming your payment. This page will show Paid once it clears."}
+        </div>
+      )}
+
+      {status === "cancelled" ? (
+        <div className="mt-8 border border-stone p-5 text-sm">
+          <p>{ORDER_STATUS_BLURB.cancelled}</p>
+          {order.cancel_reason && (
+            <p className="mt-1 text-muted">{order.cancel_reason}</p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-8 border border-stone p-5">
+          <ol className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            {ORDER_FLOW.map((step, i) => (
+              <li
+                key={step}
+                className={`flex items-center gap-2 ${i <= reached ? "" : "text-muted"}`}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${i <= reached ? "bg-ink" : "border border-stone"}`}
+                />
+                <span className="uppercase tracking-[0.14em]">
+                  {ORDER_STATUS_LABEL[step]}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-sm text-muted">{ORDER_STATUS_BLURB[status]}</p>
+        </div>
+      )}
+
+      {order.tracking_number && (
+        <div className="mt-6 border border-stone p-5">
+          <p className="eyebrow text-muted">Tracking</p>
+          <p className="mt-2 text-sm">{order.courier}</p>
+          <p className="mt-1 font-mono text-lg">{order.tracking_number}</p>
+          <p className="mt-2 text-xs text-muted">
+            Track it on the courier&apos;s website with this number
+            {order.shipped_at
+              ? `. Shipped ${new Date(order.shipped_at).toLocaleDateString()}.`
+              : "."}{" "}
+            It can take a few hours to appear.
+          </p>
         </div>
       )}
 
@@ -160,7 +210,7 @@ export default async function OrderStatusPage(props: {
         </p>
       )}
 
-      {needsReceipt && (
+      {needsReceipt && status !== "cancelled" && (
         <div className="mt-10 border border-stone p-6">
           <p className="eyebrow text-muted">Bank Transfer Details</p>
           <dl className="mt-4 grid grid-cols-[140px_1fr] gap-y-2 text-sm">
