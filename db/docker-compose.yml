@@ -1,0 +1,67 @@
+# Berke Pak — self-hosted data layer (replaces Supabase).
+# Postgres holds all application data; MinIO provides S3-compatible object
+# storage for receipt and product images (replaces Supabase Storage buckets).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: berkepak_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: berkepak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-berkepak_dev}
+      POSTGRES_DB: berkepak
+    ports:
+      - "5433:5432"
+    volumes:
+      - berkepak_pgdata:/var/lib/postgresql/data
+      # *.sql here run once, in filename order, on first boot of an empty volume.
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U berkepak -d berkepak"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: berkepak_storage
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-berkepak}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-berkepak_dev_secret}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - berkepak_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Catches every outbound email in local development so signup verification
+  # and password-reset links are testable without real SMTP.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: berkepak_mail
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web inbox
+    environment:
+      MP_MAX_MESSAGES: 500
+
+  adminer:
+    image: adminer:latest
+    container_name: berkepak_adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  berkepak_pgdata:
+  berkepak_minio:
