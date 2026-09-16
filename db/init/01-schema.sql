@@ -233,6 +233,14 @@ create table orders (
   payment_surcharge numeric(10,2) not null default 0,
   shipping_address jsonb not null,
   otp_verified     boolean not null default false,
+  -- Fulfilment. courier and tracking_number are set together when an order
+  -- ships; an order marked shipped without them is one nobody can chase.
+  courier          text,
+  tracking_number  text,
+  shipped_at       timestamptz,
+  delivered_at     timestamptz,
+  cancelled_at     timestamptz,
+  cancel_reason    text,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -400,6 +408,23 @@ begin
      set stock = greatest(stock - p_quantity, 0)
    where catalog_id = p_product_id and color_name = p_color_name;
   return true;
+end;
+$fn$;
+
+-- Cancelling an order puts its suits back. Kept beside decrement_product_stock
+-- so both halves of the stock story live in one place.
+create or replace function restock_order_items(p_order_id text) returns void
+language plpgsql as $fn$
+begin
+  update product_colors pc
+     set stock = pc.stock + agg.qty
+    from (
+      select product_id, color, ceil(sum(quantity))::integer as qty
+        from order_items
+       where order_id = p_order_id and product_id is not null
+       group by product_id, color
+    ) as agg
+   where pc.catalog_id = agg.product_id and pc.color_name = agg.color;
 end;
 $fn$;
 

@@ -4,8 +4,10 @@ import { query, queryOne } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { buildOrderConfirmationEmail } from "@/lib/email-templates/order-confirmation";
 import { buildPaymentConfirmedEmail } from "@/lib/email-templates/payment-confirmed";
+import { buildOrderShippedEmail } from "@/lib/email-templates/order-shipped";
 
-const ORDER_COLUMNS = `id, subtotal, shipping, discount_amount, total, payment_method, created_at`;
+const ORDER_COLUMNS = `id, subtotal, shipping, discount_amount, total, payment_method,
+                       status, courier, tracking_number, created_at`;
 const ITEM_COLUMNS = `product_name, color, unit, quantity, unit_price, stitching, stitching_addon, line_total`;
 
 async function loadOrder(orderId: string, label: string) {
@@ -83,6 +85,25 @@ export async function sendPaymentConfirmedEmail(
   await sendEmail({
     to: userEmail,
     subject: `Payment Confirmed — ${orderId} | Berke Pak`,
+    html,
+  });
+}
+
+export async function sendOrderShippedEmail(
+  orderId: string,
+  userEmail: string,
+): Promise<void> {
+  const data = await loadOrder(orderId, "sendOrderShippedEmail");
+  if (!data) return;
+
+  const html = buildOrderShippedEmail(
+    data.order as Parameters<typeof buildOrderShippedEmail>[0],
+    data.items as Parameters<typeof buildOrderShippedEmail>[1],
+  );
+
+  await sendEmail({
+    to: userEmail,
+    subject: `Your order has shipped \u2014 ${orderId} | Berke Pak`,
     html,
   });
 }
