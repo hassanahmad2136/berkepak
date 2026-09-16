@@ -1,56 +1,44 @@
-import Link from "next/link";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/guards";
+import { queryOne } from "@/lib/db";
+import { isOnlinePaymentEnabled, onlinePaymentLabel } from "@/lib/payments/registry";
 import { CheckoutFlow } from "./CheckoutFlow";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
 
+/**
+ * Checkout is open to guests. Signing in is an accelerator (saved address,
+ * order history), never a requirement — gating it here lost every sale from a
+ * customer who did not want an account.
+ */
 export default async function CheckoutPage() {
-  if (!isSupabaseConfigured()) {
-    return <SetupNotice feature="Checkout" />;
-  }
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
-  if (!userData.user) {
-    return (
-      <div className="mx-auto max-w-md px-4 sm:px-8 py-24 text-center">
-        <p className="display text-3xl">Sign in to check out.</p>
-        <p className="mt-3 text-sm text-muted">
-          Track orders, save addresses, and upload receipts in one place.
-        </p>
-        <div className="mt-8 flex justify-center gap-3">
-          <Link href="/login?next=/checkout" className="btn btn-primary">
-            Sign In
-          </Link>
-          <Link href="/signup" className="btn btn-ghost">
-            Create Account
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const [{ data: profile }, { data: defaultAddress }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, phone")
-      .eq("id", userData.user.id)
-      .maybeSingle(),
-    supabase
-      .from("addresses")
-      .select("*")
-      .eq("user_id", userData.user.id)
-      .order("is_default", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const defaultAddress = user
+    ? await queryOne<{
+        full_name: string;
+        phone: string;
+        line1: string;
+        line2: string | null;
+        city: string;
+        province: string;
+        postal_code: string;
+      }>(
+        `select full_name, phone, line1, line2, city, province, postal_code
+           from addresses
+          where user_id = $1
+          order by is_default desc, created_at desc
+          limit 1`,
+        [user.id],
+      )
+    : null;
 
   return (
     <CheckoutFlow
-      userEmail={userData.user.email ?? ""}
+      userEmail={user?.email ?? ""}
+      signedIn={!!user}
+      onlineEnabled={isOnlinePaymentEnabled()}
+      onlineLabel={onlinePaymentLabel()}
       defaults={{
-        fullName: defaultAddress?.full_name ?? profile?.full_name ?? "",
-        phone: defaultAddress?.phone ?? profile?.phone ?? "",
+        fullName: defaultAddress?.full_name ?? user?.fullName ?? "",
+        phone: defaultAddress?.phone ?? user?.phone ?? "",
         line1: defaultAddress?.line1 ?? "",
         line2: defaultAddress?.line2 ?? "",
         city: defaultAddress?.city ?? "",

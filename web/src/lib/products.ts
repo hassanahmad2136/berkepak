@@ -1,14 +1,12 @@
-// web/src/lib/products.ts
-// Product catalog data access — Supabase SDK only (Saleor removed)
-import { createClient } from "@supabase/supabase-js";
+import "server-only";
+import { query, queryOne } from "@/lib/db";
+import { listedPrice } from "./pricing";
 import type { Product } from "./types";
 
-function createAnonClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-}
+/**
+ * Product catalog access. Server-only: it talks to Postgres directly, so client
+ * components must go through the server actions in lib/actions/catalog.ts.
+ */
 
 interface CatalogRow {
   id: string;
@@ -21,130 +19,114 @@ interface CatalogRow {
   composition: string | null;
   description: string | null;
   short_description: string | null;
-  price_per_meter: number;
-  price_per_suit: number;
-  meters_per_suit: number;
-  images: string[];
+  price_per_meter: string;
+  price_per_suit: string;
+  meters_per_suit: string;
+  images: string[] | null;
   is_new: boolean;
   is_featured: boolean;
   is_active: boolean;
-  product_colors: Array<{
-    id: string;
-    color_name: string;
-    image_url: string | null;
-    stock: number;
-  }>;
+  first_color: string | null;
 }
 
+// numeric columns arrive from pg as strings to preserve precision.
+const n = (v: string | number | null | undefined): number => Number(v ?? 0);
+
 function mapRow(row: CatalogRow): Product {
-  const firstColor = row.product_colors?.[0];
   return {
-    id:               row.id,
-    slug:             row.slug,
-    name:             row.name,
-    category:         row.category?.toLowerCase() ?? "fabric",
-    weave:            (row.weave_type?.toLowerCase() ?? "plain") as Product["weave"],
-    gsm:              row.gsm ?? 0,
-    threadCount:      row.thread_count ?? undefined,
-    composition:      row.composition ?? "",
-    colorName:        firstColor?.color_name ?? "Natural",
-    colorHex:         "#CCCCCC",
-    pricePerMeter:    row.price_per_meter,
-    pricePerSuit:     row.price_per_suit,
-    metersPerSuit:    row.meters_per_suit,
-    images:           row.images ?? [],
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    category: row.category?.toLowerCase() ?? "fabric",
+    weave: (row.weave_type?.toLowerCase() ?? "plain") as Product["weave"],
+    gsm: row.gsm ?? 0,
+    threadCount: row.thread_count ?? undefined,
+    composition: row.composition ?? "",
+    colorName: row.first_color ?? "Natural",
+    colorHex: "#CCCCCC",
+    // The storefront shows listed prices; the stored price is kept alongside
+    // for bank transfer and for anything that must not see the fee.
+    pricePerMeter: listedPrice(n(row.price_per_meter)),
+    pricePerSuit: listedPrice(n(row.price_per_suit)),
+    basePricePerMeter: n(row.price_per_meter),
+    basePricePerSuit: n(row.price_per_suit),
+    metersPerSuit: n(row.meters_per_suit),
+    images: row.images ?? [],
     shortDescription: row.short_description ?? "",
-    description:      row.description ?? "",
-    isNew:            row.is_new,
-    isFeatured:       row.is_featured,
-    available:        row.is_active,
-    meterVariantId:   undefined,
-    suitVariantId:    undefined,
+    description: row.description ?? "",
+    isNew: row.is_new,
+    isFeatured: row.is_featured,
+    available: row.is_active,
+    meterVariantId: undefined,
+    suitVariantId: undefined,
   };
 }
 
-const SELECT_FIELDS = `
-  id, slug, name, category, weave_type, gsm, thread_count,
-  composition, description, short_description,
-  price_per_meter, price_per_suit, meters_per_suit,
-  images, is_new, is_featured, is_active,
-  product_colors ( id, color_name, image_url, stock )
+const SELECT = `
+  select p.id, p.slug, p.name, p.category, p.weave_type, p.gsm, p.thread_count,
+         p.composition, p.description, p.short_description,
+         p.price_per_meter, p.price_per_suit, p.meters_per_suit,
+         p.images, p.is_new, p.is_featured, p.is_active,
+         (select pc.color_name from product_colors pc
+           where pc.catalog_id = p.id order by pc.color_name limit 1) as first_color
+    from product_catalog p
 `;
 
-// Module-level cache for sync helpers (populated after first getProducts() call)
-let _productCache: Product[] = [];
-
 export async function getProducts(): Promise<Product[]> {
-  const supabase = createAnonClient();
-  const { data, error } = await supabase
-    .from("product_catalog")
-    .select(SELECT_FIELDS)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true });
-
-  if (error) throw new Error(`getProducts: ${error.message}`);
-  const products = (data as CatalogRow[]).map(mapRow);
-  _productCache = products;
-  return products;
+  const rows = await query<CatalogRow>(
+    `${SELECT} where p.is_active = true order by p.created_at asc`,
+  );
+  return rows.map(mapRow);
 }
 
 export async function getProductBySlugAsync(slug: string): Promise<Product | null> {
-  const supabase = createAnonClient();
-  const { data, error } = await supabase
-    .from("product_catalog")
-    .select(SELECT_FIELDS)
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .single();
-
-  if (error) return null;
-  return mapRow(data as CatalogRow);
+  const row = await queryOne<CatalogRow>(
+    `${SELECT} where p.slug = $1 and p.is_active = true`,
+    [slug],
+  );
+  return row ? mapRow(row) : null;
 }
 
 export async function getProductByIdAsync(id: string): Promise<Product | null> {
-  const supabase = createAnonClient();
-  const { data, error } = await supabase
-    .from("product_catalog")
-    .select(SELECT_FIELDS)
-    .eq("id", id)
-    .eq("is_active", true)
-    .single();
+  const row = await queryOne<CatalogRow>(
+    `${SELECT} where p.id = $1 and p.is_active = true`,
+    [id],
+  );
+  return row ? mapRow(row) : null;
+}
 
-  if (error) return null;
-  return mapRow(data as CatalogRow);
+/** Bulk lookup — one round trip for a cart or wishlist. */
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const rows = await query<CatalogRow>(
+    `${SELECT} where p.id = any($1::uuid[]) and p.is_active = true`,
+    [ids],
+  );
+  return rows.map(mapRow);
 }
 
 export async function getNewArrivalsAsync(): Promise<Product[]> {
-  const supabase = createAnonClient();
-  const { data, error } = await supabase
-    .from("product_catalog")
-    .select(SELECT_FIELDS)
-    .eq("is_active", true)
-    .eq("is_new", true)
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(`getNewArrivalsAsync: ${error.message}`);
-  return (data as CatalogRow[]).map(mapRow);
+  const rows = await query<CatalogRow>(
+    `${SELECT} where p.is_active = true and p.is_new = true order by p.created_at desc`,
+  );
+  return rows.map(mapRow);
 }
 
 export async function getFeaturedAsync(): Promise<Product[]> {
-  const supabase = createAnonClient();
-  const { data, error } = await supabase
-    .from("product_catalog")
-    .select(SELECT_FIELDS)
-    .eq("is_active", true)
-    .eq("is_featured", true);
-
-  if (error) throw new Error(`getFeaturedAsync: ${error.message}`);
-  return (data as CatalogRow[]).map(mapRow);
+  const rows = await query<CatalogRow>(
+    `${SELECT} where p.is_active = true and p.is_featured = true order by p.created_at asc`,
+  );
+  return rows.map(mapRow);
 }
 
-// Synchronous helpers — use module-level cache populated by getProducts().
-// Cart and drawer components call these; they work after first server render populates cache.
-export function getProductBySlug(slug: string): Product | undefined {
-  return _productCache.find(p => p.slug === slug);
-}
-
-export function getProductById(id: string): Product | undefined {
-  return _productCache.find(p => p.id === id);
+export async function getProductColors(
+  catalogId: string,
+): Promise<Array<{ color_name: string; image_url: string | null; stock: number }>> {
+  return query(
+    `select color_name, image_url, stock
+       from product_colors
+      where catalog_id = $1
+      order by color_name asc`,
+    [catalogId],
+  );
 }

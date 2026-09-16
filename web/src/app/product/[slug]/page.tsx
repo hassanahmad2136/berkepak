@@ -1,20 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getProductBySlugAsync, getProducts } from "@/lib/products";
-import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getProductBySlugAsync, getProducts, getProductColors } from "@/lib/products";
+import { getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getActiveCampaigns } from "@/lib/campaigns.server";
 import { formatPKR } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
-import { createClient } from "@supabase/supabase-js";
 import { ProductInteractiveClient } from "./ProductInteractiveClient";
-
-function getAnonSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  return createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 export async function generateStaticParams() {
   const allProducts = await getProducts();
@@ -27,8 +19,20 @@ export async function generateMetadata(props: {
   const { slug } = await props.params;
   const product = await getProductBySlugAsync(slug);
   if (!product || !product.available) return { title: "Fabric not found" };
-  const title = `${product.name} — ${product.composition}`;
-  const description = `${product.shortDescription} ${product.gsm} GSM ${product.weave} weave in ${product.colorName}. ${formatPKR(product.pricePerSuit)} per suit (${product.metersPerSuit}m).`;
+  // Every field below is optional in the catalog — no product currently records
+  // a composition or GSM, so build these from whatever is actually present
+  // rather than emitting "Name —  — Berke Pak" and "0 GSM".
+  const title = [product.name, product.composition].filter(Boolean).join(" — ");
+  const description =
+    [
+      product.shortDescription,
+      product.gsm ? `${product.gsm} GSM` : null,
+      product.weave ? `${product.weave} weave` : null,
+      product.colorName ? `in ${product.colorName}` : null,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() + `. ${formatPKR(product.pricePerSuit)} per suit (${product.metersPerSuit}m).`;
   return {
     title,
     description,
@@ -50,24 +54,16 @@ export default async function ProductPage(props: {
   if (!product || !product.available) notFound();
 
   // Fetch color varieties and stock from product_colors via catalog_id
-  let dbColors = [
+  let dbColors: Array<{ color_name: string; image_url: string | null; stock: number }> = [
     { color_name: "White", image_url: null, stock: 10 },
     { color_name: "Black", image_url: null, stock: 10 },
   ];
 
   try {
-    const supabase = getAnonSupabase();
-    const { data: colorsData } = await supabase
-      .from("product_colors")
-      .select("color_name, image_url, stock")
-      .eq("catalog_id", product.id)
-      .order("color_name", { ascending: true });
-
-    if (colorsData && colorsData.length > 0) {
-      dbColors = colorsData;
-    }
+    const colorsData = await getProductColors(product.id);
+    if (colorsData.length > 0) dbColors = colorsData;
   } catch (err) {
-    console.warn("Supabase fetch failed on product page, using defaults:", err);
+    console.warn("Colour fetch failed on product page, using defaults:", err);
   }
 
   const [allProducts, campaigns] = await Promise.all([getProducts(), getActiveCampaigns()]);
@@ -79,6 +75,12 @@ export default async function ProductPage(props: {
   const discount = activeCampaign
     ? computeDiscount(product.pricePerSuit, product.pricePerMeter, activeCampaign)
     : undefined;
+  // The same suit by direct bank transfer: the stored price, with the same
+  // campaign applied to it rather than a fee subtracted after the fact.
+  const bankTransferPrice = activeCampaign
+    ? computeDiscount(product.basePricePerSuit, product.basePricePerMeter, activeCampaign)
+        .discountedPricePerSuit
+    : product.basePricePerSuit;
 
   return (
     <article className="mx-auto max-w-[1440px] px-4 sm:px-8 pt-6 pb-24">
@@ -90,7 +92,12 @@ export default async function ProductPage(props: {
         <span>{product.name}</span>
       </nav>
 
-      <ProductInteractiveClient product={product} colors={dbColors} discount={discount} />
+      <ProductInteractiveClient
+        product={product}
+        colors={dbColors}
+        discount={discount}
+        bankTransferPrice={bankTransferPrice}
+      />
 
       {related.length > 0 && (
         <section className="mt-24">

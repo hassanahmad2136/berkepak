@@ -19,12 +19,15 @@ interface ProductInteractiveClientProps {
   product: Product;
   colors: ProductColor[];
   discount?: ProductDiscount;
+  /** Price per suit by direct bank transfer, which carries no gateway fee. */
+  bankTransferPrice: number;
 }
 
 export function ProductInteractiveClient({
   product,
   colors,
   discount,
+  bankTransferPrice,
 }: ProductInteractiveClientProps) {
   // Try to find a matching default color or fallback to first color or White
   const initialColor =
@@ -111,6 +114,13 @@ export function ProductInteractiveClient({
           )}
           <p className="text-xs text-muted uppercase tracking-[0.14em]">/ suit</p>
         </div>
+
+        {bankTransferPrice < (discount?.discountedPricePerSuit ?? product.pricePerSuit) && (
+          <p className="mt-2 text-sm text-muted">
+            or <span className="font-medium text-ink">{formatPKR(bankTransferPrice)}</span> by
+            direct bank transfer
+          </p>
+        )}
 
         <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-stone/40 bg-stone/5 px-3 py-1 text-xs text-muted">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

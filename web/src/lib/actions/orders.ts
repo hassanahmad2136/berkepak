@@ -2,29 +2,26 @@
 
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/guards";
+import { query, queryOne } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PlaceOrderSchema } from "@/lib/validation";
-import { getProductByIdAsync } from "@/lib/products";
-import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { quoteOrder } from "@/lib/order-pricing";
+import { basisFor } from "@/lib/pricing";
 import { sendOrderConfirmationEmail } from "@/lib/actions/email-actions";
-import {
-  BESPOKE_STITCHING_ADDON_PKR,
-  type Address,
-  type CartLine,
-  type PaymentMethod,
-  type SaleUnit,
-} from "@/lib/types";
+import type { Address, CartLine, PaymentMethod } from "@/lib/types";
 
 export type PlaceOrderInput = {
   lines: CartLine[];
   address: Address;
   paymentMethod: PaymentMethod;
   promoId?: string;
+  /** Guest checkout only — ignored when a session is present. */
+  guestEmail?: string;
 };
 
 export type PlaceOrderResult =
-  | { ok: true; orderId: string; total: number }
+  | { ok: true; orderId: string; total: number; guestToken?: string }
   | { ok: false; error: string };
 
 function newOrderId(): string {
@@ -47,148 +44,139 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   }
   const validInput = parsed.data;
 
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { ok: false, error: "Please sign in to place an order." };
+  // Guest checkout is allowed. A signed-in customer's account email always wins
+  // over anything the client sends, so a guest email cannot be used to
+  // impersonate an account.
+  const user = await getCurrentUser();
+  const contactEmail = user?.email ?? validInput.guestEmail;
+  if (!contactEmail) {
+    return { ok: false, error: "An email address is required to place an order." };
+  }
 
   if (validInput.lines.length === 0) return { ok: false, error: "Cart is empty." };
 
   // For COD: verify OTP was actually consumed server-side — never trust a client boolean.
   if (validInput.paymentMethod === "cod") {
-    const adminOtp = createSupabaseAdmin();
-    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15-min window
-    // OTP is sent to user's email (stored in otp_codes.phone column regardless of method).
-    // Phone-based OTP (WhatsApp) is not yet live, so we check by authenticated email.
-    const otpTarget = userData.user.email!;
-    const { data: otpRow } = await adminOtp
-      .from("otp_codes")
-      .select("id")
-      .eq("phone", otpTarget)
-      .not("consumed_at", "is", null)
-      .gte("consumed_at", cutoff)
-      .limit(1)
-      .maybeSingle();
+    // The OTP is delivered to the contact email (the account's, or the address a
+    // guest supplied). WhatsApp delivery is not live yet.
+    const otpRow = await queryOne(
+      `select id from otp_codes
+        where destination = $1
+          and consumed_at is not null
+          and consumed_at >= now() - interval '15 minutes'
+        limit 1`,
+      [contactEmail],
+    );
     if (!otpRow) {
       return { ok: false, error: "Email address must be verified for Cash on Delivery." };
     }
   }
 
-  // Fetch active campaigns once — used for per-line discount computation.
-  const campaigns = await getActiveCampaigns();
-
-  // Recompute totals server-side so the client cannot tamper with prices.
-  const items = await Promise.all(validInput.lines.map(async (line) => {
-    const product = await getProductByIdAsync(line.productId);
-    if (!product) throw new Error(`Unknown product ${line.productId}`);
-
-    const campaign = getCampaignForProduct(product.id, product.category, campaigns);
-    const campaignDisc = campaign
-      ? computeDiscount(product.pricePerSuit, product.pricePerMeter, campaign)
-      : null;
-    const unitPrice = campaignDisc?.discountedPricePerSuit ?? product.pricePerSuit;
-    const stitchingAddon =
-      line.stitching === "bespoke"
-        ? BESPOKE_STITCHING_ADDON_PKR
-        : 0;
-    const originalLineTotal = (product.pricePerSuit + stitchingAddon) * line.quantity;
-    const lineTotal = (unitPrice + stitchingAddon) * line.quantity;
-
-    const color = line.color || "White";
-
-    return {
-      product_id: product.id,
-      product_name: product.name,
-      product_slug: product.slug,
-      unit: line.unit as SaleUnit,
-      quantity: line.quantity,
-      unit_price: unitPrice,
-      stitching: line.stitching,
-      stitching_addon: stitchingAddon,
-      line_total: lineTotal,
-      original_line_total: originalLineTotal,
-      color,
-    };
-  }));
-
-  const subtotal = items.reduce((sum, it) => sum + it.line_total, 0);
-  const originalSubtotal = items.reduce((sum, it) => sum + it.original_line_total, 0);
-  // Shipping threshold based on original (pre-discount) subtotal.
-  const shipping = originalSubtotal >= 10_000 ? 0 : 350;
-
-  // Campaign discount = difference between original and discounted line totals.
-  const campaignDiscount = originalSubtotal - subtotal;
-
-  // Re-validate coupon server-side against originalSubtotal (never trust client).
-  let couponDiscount = 0;
-  let validatedPromoId: string | null = null;
-  if (validInput.promoId) {
-    const adminForPromo = createSupabaseAdmin();
-    const { data: promo } = await adminForPromo
-      .from("promotions")
-      .select("id, discount_type, discount_value, min_order_amount, is_active, starts_at, ends_at")
-      .eq("id", validInput.promoId)
-      .eq("type", "coupon")
-      .eq("is_active", true)
-      .maybeSingle();
-    if (promo) {
-      const now = new Date();
-      const validDates =
-        (!promo.starts_at || new Date(promo.starts_at) <= now) &&
-        (!promo.ends_at || new Date(promo.ends_at) >= now);
-      const validMin = originalSubtotal >= Number(promo.min_order_amount ?? 0);
-      if (validDates && validMin) {
-        couponDiscount =
-          promo.discount_type === "pct"
-            ? Math.floor(originalSubtotal * (Number(promo.discount_value) / 100))
-            : Math.min(Number(promo.discount_value), originalSubtotal);
-        validatedPromoId = promo.id;
-      }
-    }
+  // Recompute totals server-side so the client cannot tamper with prices. The
+  // payment method picks the price book: bank transfer is charged the stored
+  // catalog price, every other method the listed price with the gateway fee
+  // folded in. Campaigns, coupons and shipping are all applied in quoteOrder.
+  let quote;
+  try {
+    quote = await quoteOrder(validInput.lines, validInput.promoId);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not price the order." };
   }
-
-  // Larger discount wins — campaign and coupon do not stack.
-  const discountAmount = Math.max(campaignDiscount, couponDiscount);
-  // Store promo_id only when coupon wins; null signals automatic campaign discount.
-  const storedPromoId = couponDiscount >= campaignDiscount ? validatedPromoId : null;
-
-  const total = Math.max(0, originalSubtotal + shipping - discountAmount);
+  const charged = basisFor(validInput.paymentMethod) === "net" ? quote.net : quote.listed;
+  const paymentSurcharge = charged.basis === "listed" ? quote.gatewayFee : 0;
 
   // -----------------------------------------------------------------------
-  // Step B+C: Atomically insert order + order_items + decrement stock.
+  // Atomically insert order + order_items + decrement stock.
   // The PostgreSQL function place_order_atomic runs all three steps in a
   // single transaction — any failure (including insufficient stock) rolls
   // back the entire operation so the DB cannot end up with a partial order.
   // -----------------------------------------------------------------------
   const orderId = newOrderId();
+  // Guests get an unguessable token so they can come back to the order to
+  // upload a bank-transfer receipt without an account.
+  const guestToken = user ? null : randomUUID().replace(/-/g, "");
 
-  const adminClient = createSupabaseAdmin();
-  const { error: placeErr } = await adminClient.rpc("place_order_atomic", {
-    p_order_id: orderId,
-    p_user_id: userData.user.id,
-    p_status: validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
-    p_payment_method: validInput.paymentMethod,
-    p_payment_status: validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
-    p_subtotal: originalSubtotal,
-    p_shipping: shipping,
-    p_discount_amount: discountAmount,
-    p_promo_id: storedPromoId,
-    p_total: total,
-    p_shipping_address: validInput.address,
-    p_otp_verified: validInput.paymentMethod === "cod",
-    p_items: items,  // Supabase serializes as JSONB
-  });
-  if (placeErr) return { ok: false, error: placeErr.message };
+  try {
+    await query(
+      `select place_order_atomic($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,$14)`,
+      [
+        orderId,
+        user?.id ?? null,
+        validInput.paymentMethod === "cod" ? "confirmed" : "unconfirmed",
+        validInput.paymentMethod,
+        validInput.paymentMethod === "bank_transfer" ? "awaiting_receipt" : "pending",
+        charged.subtotal,
+        charged.shipping,
+        charged.discountAmount,
+        charged.promoId,
+        charged.total,
+        JSON.stringify(validInput.address),
+        validInput.paymentMethod === "cod",
+        JSON.stringify(charged.items),
+        paymentSurcharge,
+      ],
+    );
+  } catch (err) {
+    // place_order_atomic raises on insufficient stock and rolls the whole
+    // transaction back, so there is nothing to clean up here.
+    const message = err instanceof Error ? err.message : "Could not place the order.";
+    return { ok: false, error: message };
+  }
 
-  revalidatePath("/account/orders");
-
-  // COD: confirmed immediately. Bank transfer: send payment instructions email.
-  if (userData.user.email) {
+  // Attach guest contact details to the order now that it exists.
+  if (!user) {
     try {
-      await sendOrderConfirmationEmail(orderId, userData.user.email);
+      await query(`update orders set guest_email = $1, guest_token = $2 where id = $3`, [
+        contactEmail,
+        guestToken,
+        orderId,
+      ]);
     } catch (err) {
-      console.error("Order confirmation email failed:", err);
+      console.error("[orders] attaching guest details failed:", err);
     }
   }
 
-  return { ok: true, orderId, total };
+  // Save the shipping address so /account/addresses is populated and the next
+  // checkout prefills. The page has always claimed this happens; it never did.
+  if (user) {
+    try {
+      const a = validInput.address;
+      await query(
+        `insert into addresses
+           (user_id, full_name, phone, line1, line2, city, province, postal_code, country, is_default)
+         select $1,$2,$3,$4,$5,$6,$7,$8,$9,
+                not exists (select 1 from addresses where user_id = $1)
+          where not exists (
+            select 1 from addresses
+             where user_id = $1 and line1 = $4 and city = $6 and postal_code = $8
+          )`,
+        [
+          user.id,
+          a.fullName,
+          a.phone,
+          a.line1,
+          a.line2 ?? null,
+          a.city,
+          a.province,
+          a.postalCode,
+          a.country ?? "Pakistan",
+        ],
+      );
+    } catch (err) {
+      // Never fail a placed order over an address bookkeeping write.
+      console.error("[orders] saving shipping address failed:", err);
+    }
+  }
+
+  revalidatePath("/account/addresses");
+  revalidatePath("/account/orders");
+
+  // COD: confirmed immediately. Bank transfer: send payment instructions email.
+  try {
+    await sendOrderConfirmationEmail(orderId, contactEmail, guestToken ?? undefined);
+  } catch (err) {
+    console.error("Order confirmation email failed:", err);
+  }
+
+  return { ok: true, orderId, total: charged.total, guestToken: guestToken ?? undefined };
 }

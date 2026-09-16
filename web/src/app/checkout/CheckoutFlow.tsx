@@ -4,15 +4,19 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getProductByIdAsync } from "@/lib/products";
+import { fetchProducts } from "@/lib/actions/catalog";
 import { formatPKR } from "@/lib/format";
+import { SITE } from "@/lib/site";
 import type { Product } from "@/lib/types";
 import type { Address, PaymentMethod } from "@/lib/types";
 import { BESPOKE_STITCHING_ADDON_PKR } from "@/lib/types";
 import { sendOtp, verifyOtp } from "@/lib/actions/otp";
 import { placeOrder } from "@/lib/actions/orders";
+import { startOrderPayment } from "@/lib/actions/payments";
+import { quoteCheckout, type CheckoutQuoteResult } from "@/lib/actions/checkout";
 import { validateCoupon } from "@/lib/actions/promotions";
 import { ReceiptUploadForm } from "@/app/account/receipts/ReceiptUploadForm";
+import { PayNowButton } from "@/components/PayNowButton";
 
 type Step = 1 | 2 | 3;
 
@@ -26,12 +30,22 @@ type Defaults = {
   postalCode: string;
 };
 
+type Quote = Extract<CheckoutQuoteResult, { ok: true }>;
+
 export function CheckoutFlow({
   defaults,
   userEmail,
+  signedIn,
+  onlineEnabled,
+  onlineLabel,
 }: {
   defaults: Defaults;
   userEmail: string;
+  signedIn: boolean;
+  /** False when no gateway is configured — the option is then hidden entirely. */
+  onlineEnabled: boolean;
+  /** The configured gateway's customer-facing name, e.g. "PayFast". */
+  onlineLabel: string;
 }) {
   const { lines, clear } = useCart();
   const [productMap, setProductMap] = useState<Map<string, Product>>(new Map());
@@ -46,7 +60,11 @@ export function CheckoutFlow({
     postalCode: defaults.postalCode,
     country: "Pakistan",
   });
-  const [payment, setPayment] = useState<PaymentMethod>("cod");
+  // Guests supply their own contact email; signed-in customers use the account's.
+  const [guestEmail, setGuestEmail] = useState("");
+  const contactEmail = signedIn ? userEmail : guestEmail.trim();
+  // Online payment is the default path, and the listed prices are its prices.
+  const [payment, setPayment] = useState<PaymentMethod>(onlineEnabled ? "online" : "bank_transfer");
   const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("email");
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState("");
@@ -56,6 +74,8 @@ export function CheckoutFlow({
   const [placePending, startPlaceTransition] = useTransition();
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [guestToken, setGuestToken] = useState<string | undefined>(undefined);
+  const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{
     promoId: string;
@@ -65,36 +85,71 @@ export function CheckoutFlow({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponPending, startCouponTransition] = useTransition();
   const [confirmedTotal, setConfirmedTotal] = useState(0);
+  const [quote, setQuote] = useState<Quote | null>(null);
 
   useEffect(() => {
     if (lines.length === 0) return;
     const ids = [...new Set(lines.map((l) => l.productId))];
-    Promise.all(ids.map((id) => getProductByIdAsync(id))).then((results) => {
+    fetchProducts(ids).then((results) => {
       setProductMap((prev) => {
         const next = new Map(prev);
-        results.forEach((p, i) => { if (p) next.set(ids[i], p); });
+        results.forEach((p) => next.set(p.id, p));
         return next;
       });
     });
   }, [lines]);
 
+  // Both totals come from the server function placeOrder charges with, so the
+  // bank-transfer saving shown here is the saving the customer actually gets.
+  const promoId = couponApplied?.promoId;
+  useEffect(() => {
+    if (lines.length === 0) return;
+    let cancelled = false;
+    quoteCheckout({ lines, promoId }).then((res) => {
+      if (!cancelled) setQuote(res.ok ? res : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lines, promoId]);
+
+  // Client-side estimate, shown only until the server quote arrives.
   const subtotal = useMemo(() => cartSubtotal(lines, productMap), [lines, productMap]);
-  // Use the pre-discount (original) subtotal for the free-shipping threshold — same logic as the
-  // server in orders.ts — so the UI never shows "Free" when the server will charge PKR 350.
-  const originalSubtotal = useMemo(
+  const { originalSubtotal, netSubtotal } = useMemo(
     () =>
-      lines.reduce((sum, line) => {
-        const product = productMap.get(line.productId);
-        if (!product) return sum;
-        const basePrice = line.unit === "meter" ? product.pricePerMeter : product.pricePerSuit;
-        const addon =
-          line.stitching === "bespoke" && line.unit === "suit" ? BESPOKE_STITCHING_ADDON_PKR : 0;
-        return sum + (basePrice + addon) * line.quantity;
-      }, 0),
+      lines.reduce(
+        (acc, line) => {
+          const product = productMap.get(line.productId);
+          if (!product) return acc;
+          const suit = line.unit === "suit";
+          const addon = line.stitching === "bespoke" && suit ? BESPOKE_STITCHING_ADDON_PKR : 0;
+          const listed = suit ? product.pricePerSuit : product.pricePerMeter;
+          const net = suit ? product.basePricePerSuit : product.basePricePerMeter;
+          return {
+            originalSubtotal: acc.originalSubtotal + (listed + addon) * line.quantity,
+            netSubtotal: acc.netSubtotal + (net + addon) * line.quantity,
+          };
+        },
+        { originalSubtotal: 0, netSubtotal: 0 },
+      ),
     [lines, productMap],
   );
-  const shipping = originalSubtotal === 0 ? 0 : originalSubtotal >= 10_000 ? 0 : 350;
-  const total = subtotal + shipping;
+  // Free shipping is judged on the net subtotal — same rule as the server.
+  const estimatedShipping =
+    netSubtotal === 0 ? 0 : netSubtotal >= SITE.freeShippingThresholdPKR ? 0 : SITE.flatShippingPKR;
+  const estimatedDiscount = Math.max(
+    originalSubtotal - subtotal,
+    couponApplied?.discountAmount ?? 0,
+  );
+
+  const listed = quote?.listed ?? {
+    subtotal: originalSubtotal,
+    shipping: estimatedShipping,
+    discountAmount: estimatedDiscount,
+    total: Math.max(0, originalSubtotal + estimatedShipping - estimatedDiscount),
+  };
+  const bankSaves = quote?.bankTransferSaves ?? 0;
+  const chosenTotal = payment === "bank_transfer" && quote ? quote.net.total : listed.total;
 
   const selectOtpMethod = (method: "whatsapp" | "email") => {
     setOtpMethod(method);
@@ -104,10 +159,18 @@ export function CheckoutFlow({
     setOtpVerified(false);
   };
 
-  const displayTotal = couponApplied ? Math.max(0, total - couponApplied.discountAmount) : total;
-
   if (placedOrderId) {
-    return <Confirmation orderId={placedOrderId} method={payment} total={confirmedTotal} />;
+    return (
+      <Confirmation
+        orderId={placedOrderId}
+        method={payment}
+        total={confirmedTotal}
+        guestToken={guestToken}
+        email={contactEmail}
+        onlineLabel={onlineLabel}
+        paymentStartError={paymentStartError}
+      />
+    );
   }
 
   if (lines.length === 0) {
@@ -124,7 +187,9 @@ export function CheckoutFlow({
     );
   }
 
+  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail);
   const canProceedToPayment =
+    emailLooksValid &&
     address.fullName &&
     address.phone &&
     address.line1 &&
@@ -135,7 +200,7 @@ export function CheckoutFlow({
   const handleSendOtp = () => {
     setOtpError(null);
     startOtpTransition(async () => {
-      const target = otpMethod === "email" ? userEmail : address.phone;
+      const target = otpMethod === "email" ? contactEmail : address.phone;
       const res = await sendOtp(target, otpMethod);
       if (res.ok) {
         setOtpSent(true);
@@ -148,7 +213,7 @@ export function CheckoutFlow({
   const handleVerifyOtp = () => {
     setOtpError(null);
     startOtpTransition(async () => {
-      const target = otpMethod === "email" ? userEmail : address.phone;
+      const target = otpMethod === "email" ? contactEmail : address.phone;
       const res = await verifyOtp(target, otpInput);
       if (res.ok) setOtpVerified(true);
       else setOtpError(res.error ?? "Invalid code.");
@@ -157,11 +222,8 @@ export function CheckoutFlow({
 
   const handleApplyCoupon = () => {
     setCouponError(null);
-    const subtotalForCoupon = [...lines].reduce((sum, line) => {
-      const product = productMap.get(line.productId);
-      if (!product) return sum;
-      return sum + lineSubtotal(line, product);
-    }, 0);
+    // Coupon minimums are judged on the net subtotal, as on the server.
+    const subtotalForCoupon = quote?.net.subtotal ?? netSubtotal;
     startCouponTransition(async () => {
       const res = await validateCoupon(couponCode.trim(), subtotalForCoupon);
       if (res.ok) {
@@ -181,16 +243,39 @@ export function CheckoutFlow({
         address,
         paymentMethod: payment,
         promoId: couponApplied?.promoId,
+        guestEmail: signedIn ? undefined : contactEmail,
       });
-      if (res.ok) {
-        setConfirmedTotal(res.total);
-        setPlacedOrderId(res.orderId);
-        clear();
-      } else {
+      if (!res.ok) {
         setPlaceError(res.error);
+        return;
       }
+
+      // The order exists from here on, so the cart is cleared whatever happens
+      // next — leaving it full invites the customer to place it a second time.
+      clear();
+      setConfirmedTotal(res.total);
+      setGuestToken(res.guestToken);
+
+      // An online order is not finished at "placed" — send the customer
+      // straight to the gateway rather than showing a confirmation for
+      // something nobody has paid for yet.
+      if (payment === "online") {
+        const started = await startOrderPayment(res.orderId, res.guestToken);
+        if (started.ok && started.redirectUrl) {
+          window.location.href = started.redirectUrl;
+          return;
+        }
+        setPaymentStartError(
+          started.ok ? "The payment page could not be opened." : started.error,
+        );
+      }
+
+      setPlacedOrderId(res.orderId);
     });
   };
+
+  const paymentCard = (method: PaymentMethod) =>
+    `block border p-5 cursor-pointer ${payment === method ? "border-ink" : "border-stone"}`;
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-10">
@@ -221,8 +306,42 @@ export function CheckoutFlow({
         <div>
           {step === 1 && (
             <section className="space-y-4">
-              <h2 className="display text-2xl">Shipping address</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="display text-2xl">
+                  {signedIn ? "Shipping address" : "Your details"}
+                </h2>
+                {!signedIn && (
+                  <p className="text-xs text-muted">
+                    Have an account?{" "}
+                    <Link href="/login?next=/checkout" className="link-underline text-ink">
+                      Sign in
+                    </Link>{" "}
+                    to use your saved address.
+                  </p>
+                )}
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
+                {signedIn ? (
+                  <p className="sm:col-span-2 text-xs text-muted">
+                    Order updates go to <strong className="text-ink">{userEmail}</strong>.
+                  </p>
+                ) : (
+                  <div className="sm:col-span-2 space-y-1">
+                    <input
+                      required
+                      type="email"
+                      autoComplete="email"
+                      className="input w-full"
+                      placeholder="Email address"
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                    />
+                    <p className="text-xs text-muted">
+                      We send your order confirmation here — no account needed.
+                    </p>
+                  </div>
+                )}
                 <input required autoComplete="name" className="input sm:col-span-2" placeholder="Full name" value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} />
                 <input required type="tel" autoComplete="tel" className="input sm:col-span-2" placeholder="Mobile number (e.g. 03001234567)" value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} />
                 <input required autoComplete="address-line1" className="input sm:col-span-2" placeholder="Address line 1" value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} />
@@ -252,7 +371,7 @@ export function CheckoutFlow({
                 {couponApplied ? (
                   <div className="flex items-center justify-between border border-green-300 bg-green-50 rounded px-4 py-3 text-sm">
                     <span className="text-green-700 font-medium">
-                      ✓ {couponApplied.code} — PKR {couponApplied.discountAmount.toLocaleString()} off
+                      ✓ {couponApplied.code} applied
                     </span>
                     <button
                       onClick={() => { setCouponApplied(null); setCouponCode(""); }}
@@ -281,11 +400,75 @@ export function CheckoutFlow({
                 {couponError && <p className="text-xs text-accent">{couponError}</p>}
               </div>
 
-              <label
-                className={`block border p-5 cursor-pointer ${
-                  payment === "cod" ? "border-ink" : "border-stone"
-                }`}
-              >
+              {onlineEnabled && (
+                <label className={paymentCard("online")}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={payment === "online"}
+                      onChange={() => setPayment("online")}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{onlineLabel}</p>
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                            Instant
+                          </span>
+                        </div>
+                        <p className="text-sm">{formatPKR(listed.total)}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        Pay by debit or credit card, mobile wallet or bank account on a secure
+                        payment page. Your order confirms the moment the payment clears.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              )}
+
+              <label className={paymentCard("bank_transfer")}>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={payment === "bank_transfer"}
+                    onChange={() => setPayment("bank_transfer")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">Direct Bank Transfer</p>
+                        {bankSaves > 0 && (
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                            Save {formatPKR(bankSaves)}
+                          </span>
+                        )}
+                      </div>
+                      {quote && (
+                        <p className="text-sm">
+                          {bankSaves > 0 && (
+                            <span className="mr-2 text-xs text-muted line-through">
+                              {formatPKR(quote.listed.total)}
+                            </span>
+                          )}
+                          {formatPKR(quote.net.total)}
+                        </p>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      Transfer to our {SITE.bank.name} account, then send us the transaction ID
+                      and a screenshot. We confirm your order once we have matched it —
+                      usually within one business day.
+                    </p>
+                  </div>
+                </div>
+              </label>
+
+              <label className={paymentCard("cod")}>
                 <div className="flex items-start gap-3">
                   <input
                     type="radio"
@@ -295,7 +478,10 @@ export function CheckoutFlow({
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Cash on Delivery</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Cash on Delivery</p>
+                      <p className="text-sm">{formatPKR(listed.total)}</p>
+                    </div>
                     <p className="mt-1 text-xs text-muted">
                       Pay in cash when your order arrives. Mobile OTP
                       verification required to confirm the order.
@@ -326,14 +512,14 @@ export function CheckoutFlow({
                               onChange={() => selectOtpMethod("email")}
                               className="accent-ink"
                             />
-                            <span>Email ({userEmail})</span>
+                            <span>Email ({contactEmail || "enter your email above"})</span>
                           </label>
                         </div>
 
                         <p className="mt-3 text-xs text-muted">
                           {otpMethod === "whatsapp"
                             ? `We'll send a 4-digit code via WhatsApp to ${address.phone || "your mobile"}.`
-                            : `We'll send a 4-digit code via email to ${userEmail}.`}
+                            : `We'll send a 4-digit code via email to ${contactEmail || "your email address"}.`}
                         </p>
 
                         {!otpSent ? (
@@ -396,58 +582,6 @@ export function CheckoutFlow({
                 </div>
               </label>
 
-              <label
-                className={`block border p-5 cursor-pointer ${
-                  payment === "bank_transfer" ? "border-ink" : "border-stone"
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={payment === "bank_transfer"}
-                    onChange={() => setPayment("bank_transfer")}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      Bank Transfer (Raast / IBAN)
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      Receive bank details on the order confirmation page.
-                      Upload your transfer receipt from your account dashboard;
-                      we'll release fulfillment after manual verification.
-                    </p>
-                  </div>
-                </div>
-              </label>
-
-              {/* Card payment — wired post-launch. See docs/superpowers/specs/ for integration notes. */}
-              <div
-                className="block border border-stone p-5 opacity-50 cursor-not-allowed select-none"
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="card"
-                    disabled
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">Pay with Card</p>
-                      <span className="text-[9px] uppercase font-bold tracking-wider text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">
-                        Coming Soon
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted">
-                      Credit and debit cards via secure payment gateway. Available soon.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               <div className="flex justify-between">
                 <button onClick={() => setStep(1)} className="link-underline text-sm">
                   ← Back
@@ -499,7 +633,9 @@ export function CheckoutFlow({
                 <p className="mt-2 text-sm">
                   {payment === "cod"
                     ? "Cash on Delivery (mobile verified)"
-                    : "Bank Transfer — receipt upload required"}
+                    : payment === "online"
+                      ? `${onlineLabel} — you'll pay on the next page`
+                      : "Direct Bank Transfer — send the transaction ID and a screenshot after ordering"}
                 </p>
               </div>
 
@@ -508,7 +644,11 @@ export function CheckoutFlow({
                 className="btn btn-primary w-full"
                 disabled={placePending}
               >
-                {placePending ? "Placing order…" : `Place order — ${formatPKR(displayTotal)}`}
+                {placePending
+                  ? "Placing order…"
+                  : payment === "online"
+                    ? `Place order & pay — ${formatPKR(chosenTotal)}`
+                    : `Place order — ${formatPKR(chosenTotal)}`}
               </button>
               {placeError && (
                 <p className="text-xs text-accent text-center">{placeError}</p>
@@ -544,13 +684,13 @@ export function CheckoutFlow({
                     <p className="truncate font-medium">{product.name}</p>
                     <p className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
                       <span className="inline-block w-2 h-2 rounded-full border border-stone/50" style={{
-                        backgroundColor: activeColor.toLowerCase() === "white" ? "#ffffff" : 
+                        backgroundColor: activeColor.toLowerCase() === "white" ? "#ffffff" :
                                          activeColor.toLowerCase() === "black" ? "#000000" :
-                                         activeColor.toLowerCase() === "blue" ? "#0000ff" : 
+                                         activeColor.toLowerCase() === "blue" ? "#0000ff" :
                                          activeColor.toLowerCase() === "red" ? "#ff0000" :
                                          activeColor.toLowerCase() === "green" ? "#008000" :
                                          activeColor.toLowerCase() === "beige" ? "#f5f5dc" :
-                                         activeColor.toLowerCase() === "gray" || activeColor.toLowerCase() === "grey" ? "#808080" : 
+                                         activeColor.toLowerCase() === "gray" || activeColor.toLowerCase() === "grey" ? "#808080" :
                                          "#dddddd"
                       }} />
                       <span>{activeColor}</span>
@@ -568,21 +708,27 @@ export function CheckoutFlow({
           <dl className="mt-4 space-y-2 border-t border-stone pt-4 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted">Subtotal</dt>
-              <dd>{formatPKR(subtotal)}</dd>
+              <dd>{formatPKR(listed.subtotal)}</dd>
             </div>
+            {listed.discountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <dt className="text-muted">Discount</dt>
+                <dd className="text-green-600 font-medium">−{formatPKR(listed.discountAmount)}</dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt className="text-muted">Shipping</dt>
-              <dd>{shipping === 0 ? "Free" : formatPKR(shipping)}</dd>
+              <dd>{listed.shipping === 0 ? "Free" : formatPKR(listed.shipping)}</dd>
             </div>
-            {couponApplied && (
+            {payment === "bank_transfer" && bankSaves > 0 && (
               <div className="flex justify-between text-sm">
-                <dt className="text-muted">Promo ({couponApplied.code})</dt>
-                <dd className="text-green-600 font-medium">−{formatPKR(couponApplied.discountAmount)}</dd>
+                <dt className="text-muted">Bank transfer saving</dt>
+                <dd className="text-green-600 font-medium">−{formatPKR(bankSaves)}</dd>
               </div>
             )}
             <div className="flex justify-between border-t border-stone pt-3 text-base">
               <dt>Total</dt>
-              <dd>{formatPKR(displayTotal)}</dd>
+              <dd>{formatPKR(chosenTotal)}</dd>
             </div>
           </dl>
         </aside>
@@ -595,37 +741,74 @@ function Confirmation({
   orderId,
   method,
   total,
+  guestToken,
+  email,
+  onlineLabel,
+  paymentStartError,
 }: {
   orderId: string;
   method: PaymentMethod;
   total: number;
+  guestToken?: string;
+  email?: string;
+  onlineLabel: string;
+  /** Set when an online order was placed but the gateway could not be opened. */
+  paymentStartError: string | null;
 }) {
   return (
     <div className="mx-auto max-w-2xl px-4 sm:px-8 py-24 text-center">
-      <p className="eyebrow text-muted">Order confirmed</p>
+      {/* Only a paid order is a confirmed one; COD confirms on OTP. */}
+      <p className="eyebrow text-muted">{method === "cod" ? "Order confirmed" : "Order received"}</p>
       <h1 className="display mt-3 text-4xl">Thank you.</h1>
       <p className="mt-3 text-sm text-muted">
         Order <strong>{orderId}</strong> — {formatPKR(total)}.
       </p>
+      {email && (
+        <p className="mt-2 text-sm text-muted">
+          A confirmation has been sent to <strong className="text-ink">{email}</strong>.
+        </p>
+      )}
+      {guestToken && (
+        <p className="mt-2 text-xs text-muted">
+          Keep the link in that email — it is how you return to this order.
+        </p>
+      )}
+
+      {method === "online" && (
+        <div className="mt-10 border border-stone p-6 text-left">
+          <p className="eyebrow text-muted">Payment</p>
+          <p className="mt-2 text-sm text-muted">
+            {paymentStartError
+              ? `Your order is saved, but ${onlineLabel} could not be opened: ${paymentStartError}`
+              : "Your order is saved and waiting for payment."}
+          </p>
+          <div className="mt-5">
+            <PayNowButton orderId={orderId} guestToken={guestToken} label={`Pay ${formatPKR(total)}`} />
+          </div>
+        </div>
+      )}
 
       {method === "bank_transfer" && (
         <div className="mt-10 border border-stone p-6 text-left">
           <p className="eyebrow text-muted">Bank Transfer Details</p>
           <dl className="mt-4 grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+            <dt className="text-muted">Amount</dt>
+            <dd className="font-medium">{formatPKR(total)}</dd>
             <dt className="text-muted">Bank</dt>
-            <dd>Meezan Bank</dd>
+            <dd>{SITE.bank.name}</dd>
             <dt className="text-muted">Account Title</dt>
-            <dd>BZ Enterprises</dd>
+            <dd>{SITE.bank.accountTitle}</dd>
             <dt className="text-muted">Account Number</dt>
-            <dd className="font-mono">02140102913486</dd>
+            <dd className="font-mono">{SITE.bank.accountNumber}</dd>
           </dl>
-          
+
           <div className="mt-8 border-t border-stone pt-6">
-            <p className="eyebrow text-muted">Upload Proof of Payment</p>
+            <p className="eyebrow text-muted">Confirm your transfer</p>
             <p className="text-xs text-muted mt-1">
-              Please transfer the total amount using the Meezan or Raast details above, then upload a screenshot of your transfer receipt here.
+              Transfer exactly {formatPKR(total)} to the account above, then enter the
+              transaction ID from your banking app and upload a screenshot of the transfer.
             </p>
-            <ReceiptUploadForm pendingOrderIds={[orderId]} />
+            <ReceiptUploadForm pendingOrderIds={[orderId]} guestToken={guestToken} />
           </div>
         </div>
       )}

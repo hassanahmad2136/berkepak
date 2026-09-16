@@ -1,32 +1,32 @@
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { formatPKR } from "@/lib/format";
-import { isSupabaseConfigured } from "@/components/SetupNotice";
-
-const PAYMENT_LABEL: Record<string, string> = {
-  pending: "Pending",
-  awaiting_receipt: "Awaiting receipt",
-  awaiting_review: "Awaiting review",
-  approved: "Approved",
-  paid: "Paid",
-  refunded: "Refunded",
-};
+import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/payment-labels";
+import { isDatabaseConfigured } from "@/components/SetupNotice";
 
 export default async function AdminOrdersPage() {
-  if (!isSupabaseConfigured()) return null;
-  const admin = createSupabaseAdmin();
-  const { data: orders } = await admin
-    .from("orders")
-    .select(
-      "id, status, payment_method, payment_status, total, shipping_address, created_at",
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  if (!isDatabaseConfigured()) return null;
+  const orders = await query<{
+    id: string;
+    status: string;
+    payment_method: string;
+    payment_status: string;
+    total: string;
+    payment_surcharge: string;
+    shipping_address: Record<string, unknown> | null;
+    created_at: Date;
+  }>(
+    `select id, status, payment_method, payment_status, total, payment_surcharge,
+            shipping_address, created_at
+       from orders
+      order by created_at desc
+      limit 100`,
+  );
 
   return (
     <div>
       <h2 className="display text-2xl">Recent orders</h2>
 
-      {!orders || orders.length === 0 ? (
+      {orders.length === 0 ? (
         <p className="mt-4 text-sm text-muted">No orders yet.</p>
       ) : (
         <ul className="mt-6 divide-y divide-stone border border-stone">
@@ -35,6 +35,7 @@ export default async function AdminOrdersPage() {
               fullName?: string;
               city?: string;
             } | null;
+            const surcharge = Number(o.payment_surcharge);
             return (
               <li
                 key={o.id}
@@ -52,9 +53,15 @@ export default async function AdminOrdersPage() {
                 </div>
                 <div className="text-right">
                   <p>{formatPKR(Number(o.total))}</p>
+                  {/* The customer paid the listed price; the fee inside it goes to the gateway. */}
+                  {surcharge > 0 && (
+                    <p className="text-xs text-muted mt-1">
+                      Net {formatPKR(Number(o.total) - surcharge)} · fee {formatPKR(surcharge)}
+                    </p>
+                  )}
                   <p className="text-xs text-muted mt-1">
-                    {o.payment_method === "cod" ? "COD" : "Bank Transfer"} ·{" "}
-                    {PAYMENT_LABEL[o.payment_status] ?? o.payment_status}
+                    {PAYMENT_METHOD_LABEL[o.payment_method] ?? o.payment_method} ·{" "}
+                    {PAYMENT_STATUS_LABEL[o.payment_status] ?? o.payment_status}
                   </p>
                 </div>
               </li>

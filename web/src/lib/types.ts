@@ -16,8 +16,14 @@ export interface Product {
   composition: string;
   colorName: string;
   colorHex: string;
+  /** Listed price: what the storefront shows and online payment charges (gateway fee included). */
   pricePerMeter: number;
+  /** Listed price: what the storefront shows and online payment charges (gateway fee included). */
   pricePerSuit: number;
+  /** Stored catalog price — what direct bank transfer charges. See lib/pricing.ts. */
+  basePricePerMeter: number;
+  /** Stored catalog price — what direct bank transfer charges. See lib/pricing.ts. */
+  basePricePerSuit: number;
   metersPerSuit: number;
   images: string[];
   shortDescription: string;
@@ -51,7 +57,7 @@ export interface Address {
   country: "Pakistan";
 }
 
-export type PaymentMethod = "cod" | "bank_transfer";
+export type PaymentMethod = "cod" | "bank_transfer" | "online";
 
 export interface CheckoutDraft {
   address: Address | null;

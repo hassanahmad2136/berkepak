@@ -1,3 +1,4 @@
+import { PAYMENT_METHOD_LABEL } from "@/lib/payment-labels";
 type OrderItem = {
   product_name: string;
   color: string;
@@ -15,7 +16,7 @@ type OrderData = {
   shipping: number;
   discount_amount: number;
   total: number;
-  payment_method: "cod" | "bank_transfer";
+  payment_method: "cod" | "bank_transfer" | "online";
   created_at: string;
 };
 
@@ -70,7 +71,7 @@ export function buildOrderConfirmationEmail(order: OrderData, items: OrderItem[]
           <tr><td style="padding: 4px 0; color: #6b6b63;">Account Number</td><td style="padding: 4px 0; color: #1a1a1a; font-family: monospace;">02140102913486</td></tr>
         </table>
         <p style="margin: 16px 0 0; font-size: 12px; color: #6b6b63; line-height: 1.6;">
-          Please transfer <strong style="color: #1a1a1a;">${pkr(order.total)}</strong> using the details above, then upload your receipt screenshot from your account dashboard or via WhatsApp.
+          Please transfer <strong style="color: #1a1a1a;">${pkr(order.total)}</strong> using the details above, then send us the transaction ID from your banking app and a screenshot of the transfer, from your order page, your account, or on WhatsApp.
         </p>
       </div>`
       : `<p style="margin-top: 24px; font-size: 13px; color: #6b6b63; line-height: 1.6;">
@@ -127,7 +128,7 @@ export function buildOrderConfirmationEmail(order: OrderData, items: OrderItem[]
 
       <!-- Payment method -->
       <p style="margin: 24px 0 0; font-size: 13px; color: #6b6b63;">
-        Payment: <strong style="color: #1a1a1a;">${order.payment_method === "cod" ? "Cash on Delivery" : "Bank Transfer (Raast / IBAN)"}</strong>
+        Payment: <strong style="color: #1a1a1a;">${PAYMENT_METHOD_LABEL[order.payment_method] ?? order.payment_method}</strong>
       </p>
 
       ${bankSection}
