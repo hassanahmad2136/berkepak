@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { LoginForm } from "./LoginForm";
-import { SocialAuthButtons } from "@/components/SocialAuthButtons";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { isDatabaseConfigured, SetupNotice } from "@/components/SetupNotice";
 
 export default async function LoginPage(props: {
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  if (!isSupabaseConfigured()) return <SetupNotice feature="Sign in" />;
+  if (!isDatabaseConfigured()) return <SetupNotice feature="Sign in" />;
   const { next, error } = await props.searchParams;
 
   return (
@@ -21,12 +20,6 @@ export default async function LoginPage(props: {
       )}
 
       <LoginForm next={next} />
-
-      <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-muted">
-        <span className="h-px flex-1 bg-stone" /> or <span className="h-px flex-1 bg-stone" />
-      </div>
-
-      <SocialAuthButtons next={next} />
 
       <p className="mt-8 text-center text-sm text-muted">
         New to Berke Pak?{" "}

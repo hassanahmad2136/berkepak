@@ -1,21 +1,15 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/guards";
 import { ProfileForms } from "./ProfileForms";
 
 export default async function ProfilePage() {
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+  const user = await requireUser("/account/profile");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId!)
-    .maybeSingle();
-
+  // `profiles` was merged into `users` when Supabase Auth was removed; the shape
+  // ProfileForms expects is unchanged.
   return (
     <ProfileForms
-      email={userData.user?.email ?? ""}
-      profile={profile}
+      email={user.email}
+      profile={{ full_name: user.fullName, phone: user.phone }}
     />
   );
 }

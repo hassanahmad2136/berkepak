@@ -3,12 +3,19 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { loginAction, type AuthState } from "@/lib/actions/auth";
+import { ConfirmationPanel } from "@/app/signup/SignupForm";
 
 export function LoginForm({ next }: { next?: string }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     loginAction,
     undefined,
   );
+
+  // An unverified account cannot sign in; show the same "check your email"
+  // panel as signup, with its resend button, instead of failing silently.
+  if (state && "pendingConfirmation" in state && state.pendingConfirmation) {
+    return <ConfirmationPanel email={state.email} />;
+  }
 
   return (
     <form action={formAction} className="mt-8 space-y-3">

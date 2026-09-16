@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { isDatabaseConfigured, SetupNotice } from "@/components/SetupNotice";
 
 export default async function ForgotPasswordPage() {
-  if (!isSupabaseConfigured()) return <SetupNotice feature="Password reset" />;
+  if (!isDatabaseConfigured()) return <SetupNotice feature="Password reset" />;
 
   return (
     <div className="mx-auto max-w-md px-4 sm:px-8 py-20">

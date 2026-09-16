@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { resetPasswordAction } from "@/lib/actions/auth";
 
-export function ResetPasswordForm() {
+export function ResetPasswordForm({ token }: { token: string }) {
   const [state, formAction, pending] = useActionState(
     resetPasswordAction,
     undefined
@@ -11,6 +11,9 @@ export function ResetPasswordForm() {
 
   return (
     <form action={formAction} className="mt-8 space-y-4">
+      {/* The reset token comes from the emailed link and is verified server-side. */}
+      <input type="hidden" name="token" value={token} />
+
       <div className="space-y-1">
         <label className="text-xs font-semibold text-ink" htmlFor="password-input">New Password</label>
         <input

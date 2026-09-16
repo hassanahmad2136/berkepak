@@ -1,85 +1,36 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
-import { createServerClient } from "@supabase/ssr";
 
-export async function middleware(request: NextRequest) {
-  // First, update the session (refresh auth cookies, etc.)
-  let response = await updateSession(request);
+/**
+ * NOT A SECURITY BOUNDARY.
+ *
+ * The Edge runtime cannot open a Postgres connection, so this cannot verify
+ * that a session token is real, unexpired, or attached to an admin. All it does
+ * is bounce obviously-anonymous visitors away from private routes so they get a
+ * login page instead of a flash of empty UI.
+ *
+ * Real enforcement lives in requireUser() / requireAdmin() (lib/auth/guards.ts),
+ * which every protected layout, page and server action must call for itself.
+ */
+const SESSION_COOKIE = "bp_session";
+const PROTECTED = ["/account", "/admin"];
 
-  // Check if this is an admin route
-  const pathname = request.nextUrl.pathname;
-  const isAdminRoute = pathname.startsWith("/admin");
-
-  if (isAdminRoute) {
-    // Create a Supabase client to check authentication and admin status
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!url || !key) {
-      // If Supabase env vars are missing, deny access
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    const supabase = createServerClient(url, key, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
-        },
-      },
-    });
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // Not authenticated: redirect to login with next param
-    if (!user) {
-      const redirect = request.nextUrl.clone();
-      redirect.pathname = "/login";
-      redirect.searchParams.set("next", request.nextUrl.pathname);
-      return NextResponse.redirect(redirect);
-    }
-
-    // Authenticated, now check if admin via admin_users table (service role)
-    const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!adminKey) {
-      // Service role key missing, deny access
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-
-    // Service-role client with no-op cookie adapter (Edge Runtime compatible)
-    const adminClient = createServerClient(url, adminKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      cookies: {
-        getAll: () => [],
-        setAll: () => {},
-      },
-    });
-
-    const { data: adminUser, error } = await adminClient
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error || !adminUser) {
-      // Not an admin: redirect to home
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (!PROTECTED.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
   }
 
-  return response;
+  if (!request.cookies.get(SESSION_COOKIE)?.value) {
+    const redirect = request.nextUrl.clone();
+    redirect.pathname = "/login";
+    redirect.searchParams.set("next", pathname);
+    return NextResponse.redirect(redirect);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/account/:path*", "/admin/:path*"],
 };

@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { isCurrentUserAdmin } from "@/lib/admin";
+import { query } from "@/lib/db";
+import { getCurrentUser, isAdmin } from "@/lib/auth/guards";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 async function requireAdmin(): Promise<ActionResult> {
-  const ok = await isCurrentUserAdmin();
-  if (!ok) return { ok: false, error: "Not authorized." };
+  const user = await getCurrentUser();
+  if (!(await isAdmin(user))) return { ok: false, error: "Not authorized." };
   return { ok: true };
 }
 
@@ -44,21 +44,28 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Action
   const err = validateInput(input);
   if (err) return { ok: false, error: err };
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("campaigns").insert({
-    name: input.name.trim(),
-    discount_type: input.discountType,
-    discount_value: input.discountValue,
-    scope: input.scope,
-    category_targets: input.scope === "categories" ? (input.categoryTargets ?? []) : [],
-    product_targets: input.scope === "products" ? (input.productTargets ?? []) : [],
-    priority: input.priority ?? 0,
-    is_active: input.isActive ?? true,
-    starts_at: input.startsAt || null,
-    ends_at: input.endsAt || null,
-  });
-
-  if (error) return { ok: false, error: error.message };
+  try {
+    await query(
+      `insert into campaigns
+         (name, discount_type, discount_value, scope, category_targets,
+          product_targets, priority, is_active, starts_at, ends_at)
+       values ($1,$2,$3,$4,$5,$6::uuid[],$7,$8,$9,$10)`,
+      [
+        input.name.trim(),
+        input.discountType,
+        input.discountValue,
+        input.scope,
+        input.scope === "categories" ? (input.categoryTargets ?? []) : [],
+        input.scope === "products" ? (input.productTargets ?? []) : [],
+        input.priority ?? 0,
+        input.isActive ?? true,
+        input.startsAt || null,
+        input.endsAt || null,
+      ],
+    );
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 
   revalidatePath("/admin/campaigns");
   revalidatePath("/shop");
@@ -70,23 +77,35 @@ export async function updateCampaign(id: string, input: Partial<CreateCampaignIn
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const patch: Record<string, unknown> = {};
-  if (input.name !== undefined) patch.name = input.name.trim();
-  if (input.discountType !== undefined) patch.discount_type = input.discountType;
-  if (input.discountValue !== undefined) patch.discount_value = input.discountValue;
-  if (input.scope !== undefined) {
-    patch.scope = input.scope;
-    patch.category_targets = input.scope === "categories" ? (input.categoryTargets ?? []) : [];
-    patch.product_targets = input.scope === "products" ? (input.productTargets ?? []) : [];
-  }
-  if (input.priority !== undefined) patch.priority = input.priority;
-  if (input.isActive !== undefined) patch.is_active = input.isActive;
-  if ("startsAt" in input) patch.starts_at = input.startsAt || null;
-  if ("endsAt" in input) patch.ends_at = input.endsAt || null;
+  // Build the SET list from whichever fields were supplied.
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  const push = (col: string, value: unknown, cast = "") => {
+    values.push(value);
+    sets.push(`${col} = $${values.length}${cast}`);
+  };
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("campaigns").update(patch).eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (input.name !== undefined) push("name", input.name.trim());
+  if (input.discountType !== undefined) push("discount_type", input.discountType);
+  if (input.discountValue !== undefined) push("discount_value", input.discountValue);
+  if (input.scope !== undefined) {
+    push("scope", input.scope);
+    push("category_targets", input.scope === "categories" ? (input.categoryTargets ?? []) : []);
+    push("product_targets", input.scope === "products" ? (input.productTargets ?? []) : [], "::uuid[]");
+  }
+  if (input.priority !== undefined) push("priority", input.priority);
+  if (input.isActive !== undefined) push("is_active", input.isActive);
+  if ("startsAt" in input) push("starts_at", input.startsAt || null);
+  if ("endsAt" in input) push("ends_at", input.endsAt || null);
+
+  if (sets.length === 0) return { ok: true };
+
+  values.push(id);
+  try {
+    await query(`update campaigns set ${sets.join(", ")} where id = $${values.length}`, values);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 
   revalidatePath("/admin/campaigns");
   revalidatePath("/shop");
@@ -98,9 +117,7 @@ export async function toggleCampaign(id: string, isActive: boolean): Promise<Act
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("campaigns").update({ is_active: isActive }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  await query(`update campaigns set is_active = $1 where id = $2`, [isActive, id]);
 
   revalidatePath("/admin/campaigns");
   revalidatePath("/shop");
@@ -112,9 +129,7 @@ export async function deleteCampaign(id: string): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("campaigns").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  await query(`delete from campaigns where id = $1`, [id]);
 
   revalidatePath("/admin/campaigns");
   revalidatePath("/shop");

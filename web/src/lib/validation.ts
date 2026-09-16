@@ -39,8 +39,11 @@ export const CartLineSchema = z.object({
 export const PlaceOrderSchema = z.object({
   lines: z.array(CartLineSchema).min(1, "Cart is empty.").max(20),
   address: AddressSchema,
-  paymentMethod: z.enum(["cod", "bank_transfer"]),
+  paymentMethod: z.enum(["cod", "bank_transfer", "online"]),
   promoId: z.string().uuid().optional(),
+  // Guest checkout: the address to send confirmation and receipt instructions
+  // to. Ignored when a session is present — the account email wins.
+  guestEmail: z.string().email("Enter a valid email address.").optional(),
 });
 
 export const PriceSchema = z.number().finite().min(100).max(1_000_000);

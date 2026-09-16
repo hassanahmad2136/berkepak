@@ -1,6 +1,6 @@
 "use server";
 
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import nodemailer from "nodemailer";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -11,18 +11,13 @@ export async function subscribeToNewsletter(email: string): Promise<{ ok: boolea
   const normalized = email.trim().toLowerCase();
 
   try {
-    const admin = createSupabaseAdmin();
-    
-    // 1. Try to save in Supabase
+    // Re-subscribing is not an error.
     try {
-      const { error } = await admin
-        .from("newsletter_subscribers")
-        .insert({ email: normalized });
-      
-      // If table doesn't exist yet, PostgREST will throw a PGRST205 error
-      if (error && error.code !== "PGRST205") {
-        console.warn("Supabase save error during newsletter subscription:", error.message);
-      }
+      await query(
+        `insert into newsletter_subscribers (email) values ($1)
+         on conflict do nothing`,
+        [normalized],
+      );
     } catch (dbErr) {
       console.warn("DB save failed during newsletter subscription:", dbErr);
     }

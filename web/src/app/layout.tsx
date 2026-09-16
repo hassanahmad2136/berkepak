@@ -6,7 +6,6 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { Analytics } from "@/components/Analytics";
-import { AuthListener } from "@/components/AuthListener";
 import { Analytics as VercelAnalytics } from "@vercel/analytics/next";
 
 const displayFont = Bricolage_Grotesque({
@@ -48,7 +47,6 @@ export default function RootLayout({
         <Footer />
         <CartDrawer />
         <WhatsAppButton />
-        <AuthListener />
         <Analytics />
         <VercelAnalytics />
       </body>

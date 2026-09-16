@@ -32,7 +32,7 @@ export function DeleteConfirmModal({
           </p>
           <ul className="list-disc list-inside text-xs text-muted mt-2 space-y-1 ml-1">
             <li>Permanently remove it from the product catalog.</li>
-            <li>Delete it from the Supabase database.</li>
+            <li>Delete it from the database.</li>
             <li>Cascade and delete all color variations and stock records.</li>
             <li>Send an administrative alert email notification.</li>
           </ul>

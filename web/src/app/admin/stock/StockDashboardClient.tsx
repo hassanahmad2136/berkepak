@@ -9,9 +9,9 @@ import {
   addProductColor,
   removeProductColor,
   adminAddProductImage,
+  adminUploadProductImage,
   adminRemoveProductImage,
 } from "@/lib/actions/admin";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { stockReducer, initialStockState } from "./stockReducer";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { AddProductModal } from "./AddProductModal";
@@ -142,19 +142,15 @@ export function StockDashboardClient({
       let imageUrl: string | null = null;
       if (addForm.imageFile) {
         dispatch({ type: "ADD_UPLOAD_START" });
-        const supabase = createSupabaseBrowser();
-        const ext = addForm.imageFile.name.split(".").pop() ?? "jpg";
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from("product-images")
-          .upload(path, addForm.imageFile, { cacheControl: "3600", upsert: false });
-        if (uploadErr) {
-          dispatch({ type: "ADD_SET_ERROR", error: `Image upload failed: ${uploadErr.message}` });
+        const fd = new FormData();
+        fd.append("file", addForm.imageFile);
+        const up = await adminUploadProductImage(fd);
+        if (!up.ok) {
+          dispatch({ type: "ADD_SET_ERROR", error: `Image upload failed: ${up.error}` });
           return;
         }
         dispatch({ type: "ADD_UPLOAD_DONE" });
-        const { data: { publicUrl } } = supabase.storage.from("product-images").getPublicUrl(path);
-        imageUrl = publicUrl;
+        imageUrl = up.url;
       }
 
       const threadCountNum = addForm.threadCount ? parseInt(addForm.threadCount, 10) : null;
@@ -206,20 +202,17 @@ export function StockDashboardClient({
   const handleUploadImage = async (productId: string, file: File) => {
     dispatch({ type: "IMAGE_UPLOAD_START", productId });
     try {
-      const supabase = createSupabaseBrowser();
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${productId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadErr } = await supabase.storage
-        .from("product-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (uploadErr) {
-        dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: `Upload failed: ${uploadErr.message}` });
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("productId", productId);
+      const up = await adminUploadProductImage(fd);
+      if (!up.ok) {
+        dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: `Upload failed: ${up.error}` });
         return;
       }
-      const { data: { publicUrl } } = supabase.storage.from("product-images").getPublicUrl(path);
-      const res = await adminAddProductImage(productId, publicUrl);
+      const res = await adminAddProductImage(productId, up.url);
       if (res.ok) {
-        dispatch({ type: "IMAGE_UPLOAD_DONE", productId, imageUrl: publicUrl });
+        dispatch({ type: "IMAGE_UPLOAD_DONE", productId, imageUrl: up.url });
       } else {
         dispatch({ type: "IMAGE_UPLOAD_ERROR", productId, error: res.error || "Failed to save image." });
       }

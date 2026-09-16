@@ -68,7 +68,7 @@ export function SignupForm() {
   );
 }
 
-function ConfirmationPanel({ email }: { email: string }) {
+export function ConfirmationPanel({ email }: { email: string }) {
   const [resendPending, startResend] = useTransition();
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);

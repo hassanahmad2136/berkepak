@@ -1,17 +1,15 @@
 import { ProductCard } from "@/components/ProductCard";
-import { createSupabaseServer } from "@/lib/supabase/server";
-import { getProductById } from "@/lib/products";
+import { requireUser } from "@/lib/auth/guards";
+import { query } from "@/lib/db";
+import { getProductsByIds } from "@/lib/products";
 
 export default async function WishlistPage() {
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase
-    .from("wishlist")
-    .select("product_id")
-    .order("created_at", { ascending: false });
-
-  const items = (data ?? [])
-    .map((row) => getProductById(row.product_id))
-    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+  const user = await requireUser("/account/wishlist");
+  const rows = await query<{ product_id: string }>(
+    `select product_id from wishlist where user_id = $1 order by created_at desc`,
+    [user.id],
+  );
+  const items = await getProductsByIds(rows.map((r) => r.product_id));
 
   return (
     <div>

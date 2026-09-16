@@ -1,64 +1,62 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdmin, createSupabaseServer } from "@/lib/supabase/server";
-import { isCurrentUserAdmin } from "@/lib/admin";
+import { query, queryOne } from "@/lib/db";
+import { getCurrentUser, isAdmin } from "@/lib/auth/guards";
 import { checkRateLimit } from "@/lib/rate-limit";
-import nodemailer from "nodemailer";
+import { sendEmail, isSmtpConfigured } from "@/lib/email";
+import { deleteObject, putObject, publicUrl } from "@/lib/storage";
 import { sendPaymentConfirmedEmail } from "@/lib/actions/email-actions";
 
 export type AdminResult = { ok: true } | { ok: false; error: string };
 
-async function requireAdmin(): Promise<{ ok: true } | AdminResult> {
-  const isAdmin = await isCurrentUserAdmin();
-  if (!isAdmin) return { ok: false, error: "Not an admin." };
+async function requireAdmin(): Promise<AdminResult> {
+  const user = await getCurrentUser();
+  if (!(await isAdmin(user))) return { ok: false, error: "Not an admin." };
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Receipts
+// ---------------------------------------------------------------------------
 
 export async function approveReceipt(receiptId: string): Promise<AdminResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { data: receipt, error: fetchErr } = await admin
-    .from("receipts")
-    .select("id, order_id, status")
-    .eq("id", receiptId)
-    .maybeSingle();
-  if (fetchErr) return { ok: false, error: fetchErr.message };
+  const receipt = await queryOne<{ id: string; order_id: string | null; status: string }>(
+    `select id, order_id, status from receipts where id = $1`,
+    [receiptId],
+  );
   if (!receipt) return { ok: false, error: "Receipt not found." };
-  if (receipt.status !== "pending") {
-    return { ok: false, error: `Already ${receipt.status}.` };
+  if (receipt.status !== "pending") return { ok: false, error: `Already ${receipt.status}.` };
+
+  await query(`update receipts set status = 'approved', reviewed_at = now() where id = $1`, [
+    receiptId,
+  ]);
+  if (receipt.order_id) {
+    await query(
+      `update orders set payment_status = 'paid', status = 'confirmed' where id = $1`,
+      [receipt.order_id],
+    );
   }
-
-  const now = new Date().toISOString();
-  const { error: rErr } = await admin
-    .from("receipts")
-    .update({ status: "approved", reviewed_at: now })
-    .eq("id", receiptId);
-  if (rErr) return { ok: false, error: rErr.message };
-
-  const { error: oErr } = await admin
-    .from("orders")
-    .update({ payment_status: "paid", status: "confirmed" })
-    .eq("id", receipt.order_id);
-  if (oErr) return { ok: false, error: oErr.message };
 
   revalidatePath("/admin/receipts");
   revalidatePath("/admin/orders");
 
-  // Non-fatal: send order confirmation email to customer now that payment is confirmed.
+  // Non-fatal: tell the customer their payment cleared.
   try {
-    const { data: orderData } = await admin
-      .from("orders")
-      .select("user_id")
-      .eq("id", receipt.order_id)
-      .single();
-    if (orderData?.user_id) {
-      const { data: userData } = await admin.auth.admin.getUserById(orderData.user_id);
-      if (userData?.user?.email) {
-        await sendPaymentConfirmedEmail(receipt.order_id, userData.user.email);
-      }
+    if (receipt.order_id) {
+      // Left join: a guest order has no user row, and its contact address
+      // lives on the order itself. An inner join silently skipped guests.
+      const row = await queryOne<{ email: string | null }>(
+        `select coalesce(u.email, o.guest_email) as email
+           from orders o
+           left join users u on u.id = o.user_id
+          where o.id = $1`,
+        [receipt.order_id],
+      );
+      if (row?.email) await sendPaymentConfirmedEmail(receipt.order_id, row.email);
     }
   } catch (err) {
     console.error("Receipt approval confirmation email failed:", err);
@@ -67,39 +65,28 @@ export async function approveReceipt(receiptId: string): Promise<AdminResult> {
   return { ok: true };
 }
 
-export async function rejectReceipt(
-  receiptId: string,
-  reason: string,
-): Promise<AdminResult> {
+export async function rejectReceipt(receiptId: string, reason: string): Promise<AdminResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
   if (!reason.trim()) return { ok: false, error: "Reason required." };
 
-  const admin = createSupabaseAdmin();
-  const { data: receipt, error: fetchErr } = await admin
-    .from("receipts")
-    .select("id, order_id, status")
-    .eq("id", receiptId)
-    .maybeSingle();
-  if (fetchErr) return { ok: false, error: fetchErr.message };
+  const receipt = await queryOne<{ id: string; order_id: string | null; status: string }>(
+    `select id, order_id, status from receipts where id = $1`,
+    [receiptId],
+  );
   if (!receipt) return { ok: false, error: "Receipt not found." };
-  if (receipt.status !== "pending") {
-    return { ok: false, error: `Already ${receipt.status}.` };
+  if (receipt.status !== "pending") return { ok: false, error: `Already ${receipt.status}.` };
+
+  await query(
+    `update receipts set status = 'rejected', reviewed_at = now(), note = $2 where id = $1`,
+    [receiptId, reason],
+  );
+  // Send the order back so the customer can re-upload.
+  if (receipt.order_id) {
+    await query(`update orders set payment_status = 'awaiting_receipt' where id = $1`, [
+      receipt.order_id,
+    ]);
   }
-
-  const now = new Date().toISOString();
-  const { error: rErr } = await admin
-    .from("receipts")
-    .update({ status: "rejected", reviewed_at: now, notes: reason })
-    .eq("id", receiptId);
-  if (rErr) return { ok: false, error: rErr.message };
-
-  // Revert order to awaiting_receipt so customer can re-upload.
-  const { error: oErr } = await admin
-    .from("orders")
-    .update({ payment_status: "awaiting_receipt" })
-    .eq("id", receipt.order_id);
-  if (oErr) return { ok: false, error: oErr.message };
 
   revalidatePath("/admin/receipts");
   revalidatePath("/admin/orders");
@@ -107,43 +94,42 @@ export async function rejectReceipt(
 }
 
 // ---------------------------------------------------------------------------
-// Pricing admin — Supabase product_catalog only
+// Pricing
 // ---------------------------------------------------------------------------
+
+type AdminProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string;
+  price: number;
+  variantId: string;
+};
 
 export async function getAdminProducts(): Promise<{
   ok: boolean;
-  products?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    sku: string;
-    price: number;
-    variantId: string;
-  }>;
+  products?: AdminProduct[];
   error?: string;
 }> {
   const auth = await requireAdmin();
-  if (!auth.ok) return { ok: false, error: auth.error || "Not an admin." };
+  if (!auth.ok) return { ok: false, error: auth.error };
 
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("product_catalog")
-    .select("id, name, slug, price_per_suit")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+  const rows = await query<{ id: string; name: string; slug: string; price_per_suit: string }>(
+    `select id, name, slug, price_per_suit from product_catalog
+      where is_active = true order by name asc`,
+  );
 
-  if (error) return { ok: false, error: error.message };
-
-  const products = (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    slug: row.slug as string,
-    sku: row.slug as string,       // no separate SKU column; slug doubles as SKU
-    price: row.price_per_suit as number,
-    variantId: row.id as string,   // client uses variantId as the row key
-  }));
-
-  return { ok: true, products };
+  return {
+    ok: true,
+    products: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      sku: row.slug, // no separate SKU column; slug doubles as SKU
+      price: Number(row.price_per_suit),
+      variantId: row.id, // client uses variantId as the row key
+    })),
+  };
 }
 
 export async function updateSingleProductPrice(
@@ -161,22 +147,16 @@ export async function updateSingleProductPrice(
   if (!Number.isFinite(newPrice) || newPrice < 100) {
     return { ok: false, error: "Price must be at least 100 PKR." };
   }
-  if (newPrice > 1_000_000) {
-    return { ok: false, error: "Price cannot exceed 1,000,000 PKR." };
-  }
+  if (newPrice > 1_000_000) return { ok: false, error: "Price cannot exceed 1,000,000 PKR." };
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("product_catalog")
-    .update({ price_per_suit: newPrice, updated_at: new Date().toISOString() })
-    .eq("id", variantId);
-
-  if (error) return { ok: false, error: error.message };
+  await query(`update product_catalog set price_per_suit = $1 where id = $2`, [
+    newPrice,
+    variantId,
+  ]);
 
   revalidatePath("/shop");
   revalidatePath(`/product/${slug}`);
   revalidatePath("/admin/pricing");
-
   return { ok: true };
 }
 
@@ -191,72 +171,107 @@ export async function bulkUpdatePrices(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const productsRes = await getAdminProducts();
-  if (!productsRes.ok || !productsRes.products) {
-    return { ok: false, error: productsRes.error || "Failed to fetch products for bulk update." };
+  const sign = direction === "increase" ? 1 : -1;
+
+  // Done in one statement so an interruption cannot leave the catalog with
+  // half the products repriced.
+  try {
+    if (type === "flat") {
+      await query(
+        `update product_catalog
+            set price_per_suit = least(1000000, greatest(100, round((price_per_suit + $1) / 10) * 10))
+          where is_active = true`,
+        [sign * amount],
+      );
+    } else {
+      await query(
+        `update product_catalog
+            set price_per_suit = least(1000000, greatest(100,
+                  round((price_per_suit * (1 + ($1::numeric / 100))) / 10) * 10))
+          where is_active = true`,
+        [sign * amount],
+      );
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Bulk update failed: ${message}` };
   }
-
-  const admin = createSupabaseAdmin();
-
-  // Compute all new prices first, then send a single batch upsert so a
-  // mid-loop interruption cannot leave the catalog with split pricing.
-  const updates = productsRes.products.map((p) => {
-    const adjustment = type === "flat" ? amount : p.price * (amount / 100);
-    const newPrice = direction === "increase" ? p.price + adjustment : p.price - adjustment;
-    const roundedPrice = Math.min(1_000_000, Math.max(100, Math.round(newPrice / 10) * 10));
-    return { id: p.id, price_per_suit: roundedPrice, updated_at: new Date().toISOString() };
-  });
-
-  const { error } = await admin.from("product_catalog").upsert(updates);
-  if (error) return { ok: false, error: `Bulk update failed: ${error.message}` };
 
   revalidatePath("/shop");
   revalidatePath("/admin/pricing");
-
   return { ok: true };
 }
 
 // ---------------------------------------------------------------------------
-// Stock / Inventory admin — Supabase product_catalog only
+// Stock / inventory
 // ---------------------------------------------------------------------------
 
 export async function getAdminProductsWithVisibility(): Promise<{
   ok: boolean;
-  products?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    sku: string;
-    price: number;
-    variantId: string;
-    available: boolean;
-    images: string[];
-  }>;
+  products?: Array<AdminProduct & { available: boolean; images: string[] }>;
   error?: string;
 }> {
   const auth = await requireAdmin();
-  if (!auth.ok) return { ok: false, error: auth.error || "Not an admin." };
+  if (!auth.ok) return { ok: false, error: auth.error };
 
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("product_catalog")
-    .select("id, name, slug, price_per_suit, is_active, images")
-    .order("name", { ascending: true });
+  const rows = await query<{
+    id: string;
+    name: string;
+    slug: string;
+    price_per_suit: string;
+    is_active: boolean;
+    images: string[] | null;
+  }>(
+    `select id, name, slug, price_per_suit, is_active, images
+       from product_catalog order by name asc`,
+  );
 
-  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    products: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      sku: row.slug,
+      price: Number(row.price_per_suit),
+      variantId: row.id,
+      available: row.is_active,
+      images: row.images ?? [],
+    })),
+  };
+}
 
-  const products = (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    slug: row.slug as string,
-    sku: row.slug as string,
-    price: row.price_per_suit as number,
-    variantId: row.id as string,
-    available: row.is_active as boolean,
-    images: (row.images as string[]) ?? [],
-  }));
+/**
+ * Uploads a product image and returns its public URL. The browser used to write
+ * straight into the Supabase storage bucket with the anon key; self-hosted, the
+ * S3 credentials stay on the server and the file is relayed through here.
+ */
+export async function adminUploadProductImage(
+  formData: FormData,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
 
-  return { ok: true, products };
+  const file = formData.get("file");
+  const productId = String(formData.get("productId") ?? "new");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Please choose a file." };
+  }
+  if (file.size > 10 * 1024 * 1024) return { ok: false, error: "Image must be under 10 MB." };
+  if (!file.type.startsWith("image/")) return { ok: false, error: "That file is not an image." };
+
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const key = `${productId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  try {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    await putObject("product-images", key, bytes, file.type, { isPublic: true });
+  } catch (err) {
+    console.error("[admin] product image upload failed:", err);
+    return { ok: false, error: "Upload failed. Please try again." };
+  }
+
+  return { ok: true, url: publicUrl("product-images", key) };
 }
 
 export async function adminAddProductImage(
@@ -266,23 +281,12 @@ export async function adminAddProductImage(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { data, error: fetchErr } = await admin
-    .from("product_catalog")
-    .select("images")
-    .eq("id", productId)
-    .single();
-  if (fetchErr) return { ok: false, error: fetchErr.message };
-
-  const current: string[] = (data?.images as string[]) ?? [];
-  const updated = [...current, imageUrl];
-
-  const { error } = await admin
-    .from("product_catalog")
-    .update({ images: updated })
-    .eq("id", productId);
-  if (error) return { ok: false, error: error.message };
-
+  await query(
+    `update product_catalog set images = array_append(images, $1) where id = $2`,
+    [imageUrl, productId],
+  );
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
   return { ok: true };
 }
 
@@ -293,35 +297,21 @@ export async function adminRemoveProductImage(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { data, error: fetchErr } = await admin
-    .from("product_catalog")
-    .select("images")
-    .eq("id", productId)
-    .single();
-  if (fetchErr) return { ok: false, error: fetchErr.message };
+  await query(
+    `update product_catalog set images = array_remove(images, $1) where id = $2`,
+    [imageUrl, productId],
+  );
 
-  const current: string[] = (data?.images as string[]) ?? [];
-  const updated = current.filter((u) => u !== imageUrl);
-
-  const { error } = await admin
-    .from("product_catalog")
-    .update({ images: updated })
-    .eq("id", productId);
-  if (error) return { ok: false, error: error.message };
-
-  // Best-effort storage delete — extract path from public URL
+  // Best-effort object removal; a dangling object is harmless, a failed page is not.
   try {
-    const url = new URL(imageUrl);
-    const bucketPrefix = "/storage/v1/object/public/product-images/";
-    if (url.pathname.startsWith(bucketPrefix)) {
-      const storagePath = url.pathname.slice(bucketPrefix.length);
-      await admin.storage.from("product-images").remove([storagePath]);
-    }
+    const key = new URL(imageUrl).pathname.replace(/^\/product-images\//, "");
+    if (key) await deleteObject("product-images", key);
   } catch {
-    // Non-fatal — URL may be external or path extraction failed
+    // External or unparseable URL — nothing to delete.
   }
 
+  revalidatePath("/admin/stock");
+  revalidatePath("/shop");
   return { ok: true };
 }
 
@@ -332,25 +322,19 @@ export async function updateProductColorStock(
 ): Promise<AdminResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
-
   if (stock < 0) return { ok: false, error: "Stock cannot be negative." };
 
   const normalized = colorName.trim();
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("product_colors")
-    .update({ stock })
-    .eq("catalog_id", catalogId)
-    .eq("color_name", normalized);
-
-  if (error) return { ok: false, error: error.message };
+  await query(
+    `update product_colors set stock = $1 where catalog_id = $2 and color_name = $3`,
+    [stock, catalogId, normalized],
+  );
 
   revalidatePath("/admin/stock");
   await notifyAdminsOfChange(
     "Update Color Stock",
     `Catalog ID: ${catalogId}\nColor: ${normalized}\nNew Stock: ${stock}`,
   );
-
   return { ok: true };
 }
 
@@ -369,24 +353,25 @@ export async function getProductColorsForAdmin(): Promise<{
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("product_colors")
-    .select("id, catalog_id, color_name, image_url, stock, product_catalog(name)")
-    .order("color_name", { ascending: true });
+  const rows = await query<{
+    id: string;
+    catalog_id: string;
+    color_name: string;
+    image_url: string | null;
+    stock: number;
+    product_name: string | null;
+  }>(
+    `select pc.id, pc.catalog_id, pc.color_name, pc.image_url, pc.stock,
+            p.name as product_name
+       from product_colors pc
+       left join product_catalog p on p.id = pc.catalog_id
+      order by pc.color_name asc`,
+  );
 
-  if (error) return { ok: false, error: error.message };
-
-  const formatted = (data ?? []).map((item: any) => ({
-    id: item.id,
-    catalog_id: item.catalog_id,
-    color_name: item.color_name,
-    image_url: item.image_url,
-    stock: item.stock,
-    product_name: item.product_catalog?.name ?? "Unknown Product",
-  }));
-
-  return { ok: true, productColors: formatted };
+  return {
+    ok: true,
+    productColors: rows.map((r) => ({ ...r, product_name: r.product_name ?? "Unknown Product" })),
+  };
 }
 
 export async function toggleProductVisibility(
@@ -396,22 +381,14 @@ export async function toggleProductVisibility(
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("product_catalog")
-    .update({ is_active: visible, updated_at: new Date().toISOString() })
-    .eq("id", productId);
-
-  if (error) return { ok: false, error: error.message };
+  await query(`update product_catalog set is_active = $1 where id = $2`, [visible, productId]);
 
   revalidatePath("/admin/stock");
   revalidatePath("/shop");
-
   await notifyAdminsOfChange(
     "Toggle Product Visibility",
     `Product ID: ${productId}\nVisible: ${visible}`,
   );
-
   return { ok: true };
 }
 
@@ -429,36 +406,35 @@ export async function adminCreateProduct(
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
 
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("product_catalog")
-    .insert({
-      slug,
-      name,
-      category: categoryKey,
-      price_per_suit: pricePerSuit,
-      price_per_meter: 0,
-      composition,
-      description,
-      short_description:
+  let created: { id: string } | null;
+  try {
+    created = await queryOne<{ id: string }>(
+      `insert into product_catalog
+         (slug, name, category, price_per_suit, price_per_meter, composition,
+          description, short_description, is_active, is_new, is_featured,
+          images, weave_type, thread_count)
+       values ($1,$2,$3,$4,0,$5,$6,$7,true,false,false,$8,$9,$10)
+       returning id`,
+      [
+        slug,
+        name,
+        categoryKey,
+        pricePerSuit,
+        composition,
+        description,
         description.length > 120 ? description.slice(0, 117) + "..." : description,
-      is_active: true,
-      is_new: false,
-      is_featured: false,
-      images: imageUrl ? [imageUrl] : [],
-      weave_type: weaveType ?? null,
-      thread_count: threadCount ?? null,
-    })
-    .select("id")
-    .single();
+        imageUrl ? [imageUrl] : [],
+        weaveType ?? null,
+        threadCount ?? null,
+      ],
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
+  }
+  if (!created) return { ok: false, error: "Product could not be created." };
 
-  if (error) return { ok: false, error: error.message };
-
-  // Seed default White and Black color variants
-  await admin.from("product_colors").insert([
-    { catalog_id: data.id, color_name: "White", stock: 10, image_url: null },
-    { catalog_id: data.id, color_name: "Black", stock: 10, image_url: null },
-  ]);
+  // White/Black variants are seeded by the product_catalog_seed_colors trigger.
 
   revalidatePath("/admin/stock");
   revalidatePath("/admin/pricing");
@@ -468,32 +444,23 @@ export async function adminCreateProduct(
     "Create New Product",
     `Product: ${name}\nSlug: ${slug}\nCategory: ${categoryKey}\nPrice: ${pricePerSuit} PKR`,
   );
-
-  return { ok: true, productId: data.id };
+  return { ok: true, productId: created.id };
 }
 
 export async function adminDeleteProduct(productId: string): Promise<AdminResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  // Cascade deletes product_colors automatically via FK ON DELETE CASCADE
-  const { error } = await admin
-    .from("product_catalog")
-    .delete()
-    .eq("id", productId);
-
-  if (error) return { ok: false, error: error.message };
+  // product_colors cascade via the FK.
+  await query(`delete from product_catalog where id = $1`, [productId]);
 
   revalidatePath("/admin/stock");
   revalidatePath("/admin/pricing");
   revalidatePath("/shop");
-
   await notifyAdminsOfChange(
     "Delete Product",
     `Product ID: ${productId} permanently deleted from product_catalog (colors cascade-deleted).`,
   );
-
   return { ok: true };
 }
 
@@ -509,34 +476,26 @@ export async function addProductColor(
   if (!normalized) return { ok: false, error: "Color name is required." };
   if (initialStock < 0) return { ok: false, error: "Stock cannot be negative." };
 
-  const admin = createSupabaseAdmin();
+  const existing = await queryOne(
+    `select id from product_colors where catalog_id = $1 and color_name = $2`,
+    [catalogId, normalized],
+  );
+  if (existing) {
+    return { ok: false, error: `Color "${normalized}" already exists for this product.` };
+  }
 
-  const { data: existing } = await admin
-    .from("product_colors")
-    .select("id")
-    .eq("catalog_id", catalogId)
-    .eq("color_name", normalized)
-    .maybeSingle();
-
-  if (existing) return { ok: false, error: `Color "${normalized}" already exists for this product.` };
-
-  const { error } = await admin.from("product_colors").insert({
-    catalog_id: catalogId,
-    color_name: normalized,
-    stock: initialStock,
-    image_url: null,
-  });
-
-  if (error) return { ok: false, error: error.message };
+  await query(
+    `insert into product_colors (catalog_id, color_name, stock, image_url)
+     values ($1, $2, $3, null)`,
+    [catalogId, normalized, initialStock],
+  );
 
   revalidatePath("/admin/stock");
   revalidatePath("/shop");
-
   await notifyAdminsOfChange(
     "Add Product Color",
     `Catalog ID: ${catalogId}\nColor: ${normalized}\nInitial Stock: ${initialStock}`,
   );
-
   return { ok: true };
 }
 
@@ -544,16 +503,11 @@ export async function removeProductColor(colorId: string): Promise<AdminResult> 
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("product_colors").delete().eq("id", colorId);
-
-  if (error) return { ok: false, error: error.message };
+  await query(`delete from product_colors where id = $1`, [colorId]);
 
   revalidatePath("/admin/stock");
   revalidatePath("/shop");
-
   await notifyAdminsOfChange("Remove Product Color", `Color ID: ${colorId} deleted.`);
-
   return { ok: true };
 }
 
@@ -571,41 +525,29 @@ function escapeHtml(unsafe: string): string {
 }
 
 async function notifyAdminsOfChange(actionName: string, details: string) {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = parseInt(process.env.SMTP_PORT || "465");
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  if (!isSmtpConfigured()) return;
+  const to = process.env.ADMIN_NOTIFY_EMAILS ?? "admin@berkepakfabrics.com";
 
-  if (smtpHost && smtpUser && smtpPass) {
-    try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPass },
-      });
-
-      await transporter.sendMail({
-        from: `"BerkePak Fabrics" <${smtpUser}>`,
-        to: "admin@berkepakfabrics.com, abdullahahmad@berkepakfabrics.com",
-        subject: `Admin Action Alert: ${escapeHtml(actionName)}`,
-        html: `
-          <div style="font-family:sans-serif;padding:20px;background:#fafaf9;color:#1c1917;">
-            <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;border:1px solid #e7e5e4;">
-              <h2 style="font-size:20px;font-weight:700;color:#b91c1c;margin-bottom:20px;border-bottom:2px solid #f5f5f4;padding-bottom:10px;">
-                Admin Action Logged
-              </h2>
-              <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${escapeHtml(actionName)}</p>
-              <p style="font-size:14px;margin-bottom:12px;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
-              <div style="background:#f5f5f4;padding:15px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;margin-top:15px;border-left:4px solid #b91c1c;">
-                ${escapeHtml(details)}
-              </div>
+  try {
+    await sendEmail({
+      to,
+      subject: `Admin Action Alert: ${escapeHtml(actionName)}`,
+      html: `
+        <div style="font-family:sans-serif;padding:20px;background:#fafaf9;color:#1c1917;">
+          <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:8px;border:1px solid #e7e5e4;">
+            <h2 style="font-size:20px;font-weight:700;color:#b91c1c;margin-bottom:20px;border-bottom:2px solid #f5f5f4;padding-bottom:10px;">
+              Admin Action Logged
+            </h2>
+            <p style="font-size:14px;margin-bottom:12px;"><strong>Action:</strong> ${escapeHtml(actionName)}</p>
+            <p style="font-size:14px;margin-bottom:12px;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
+            <div style="background:#f5f5f4;padding:15px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;margin-top:15px;border-left:4px solid #b91c1c;">
+              ${escapeHtml(details)}
             </div>
           </div>
-        `,
-      });
-    } catch (err: any) {
-      console.error("Failed to send admin notification email:", err);
-    }
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error("Failed to send admin notification email:", err);
   }
 }

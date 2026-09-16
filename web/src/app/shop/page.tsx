@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
 import { getProducts } from "@/lib/products";
-import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getActiveCampaigns } from "@/lib/campaigns.server";
 import type { FabricWeave } from "@/lib/types";
 import Link from "next/link";
 import { ShopFilterButton } from "./ShopFilterButton";

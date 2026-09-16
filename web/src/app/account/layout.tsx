@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createSupabaseServer } from "@/lib/supabase/server";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { requireUser } from "@/lib/auth/guards";
 import { LogoutButton } from "@/components/LogoutButton";
 
 const NAV = [
@@ -18,21 +16,8 @@ export default async function AccountLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!isSupabaseConfigured()) {
-    return <SetupNotice feature="Account" />;
-  }
-
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) redirect("/login?next=/account");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", data.user.id)
-    .maybeSingle();
-
-  const greeting = profile?.full_name?.split(" ")[0] || "back";
+  const user = await requireUser("/account");
+  const greeting = user.fullName?.split(" ")[0] || "back";
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-12">

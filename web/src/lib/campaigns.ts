@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 
 export type Campaign = {
   id: string;
@@ -55,26 +54,6 @@ export function mapCampaignRow(row: CampaignRow): Campaign {
     endsAt: row.ends_at,
     createdAt: row.created_at,
   };
-}
-
-// Storefront: fetch currently-active campaigns via anon key (RLS enforces is_active=true)
-export async function getActiveCampaigns(): Promise<Campaign[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-
-  const supabase = createClient(url, key);
-  const now = new Date().toISOString();
-  const { data } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("is_active", true)
-    .or(`starts_at.is.null,starts_at.lte.${now}`)
-    .or(`ends_at.is.null,ends_at.gte.${now}`)
-    .order("priority", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  return ((data ?? []) as CampaignRow[]).map(mapCampaignRow);
 }
 
 // Returns the highest-priority applicable campaign for a product (campaigns pre-sorted by priority desc)

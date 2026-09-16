@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createSupabaseServer } from "@/lib/supabase/server";
-import { isAdminEmail, isCurrentUserAdmin } from "@/lib/admin";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { getCurrentUser, isAdmin as checkAdmin } from "@/lib/auth/guards";
 import { AdminHeader } from "./AdminHeader";
 
 const NAV = [
@@ -20,13 +18,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!isSupabaseConfigured()) return <SetupNotice feature="Admin" />;
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?next=/admin");
 
-  const isAdmin = await isCurrentUserAdmin();
-  if (!isAdmin) {
-    const supabase = await createSupabaseServer();
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) redirect("/login?next=/admin");
+  if (!(await checkAdmin(user))) {
 
     return (
       <div className="mx-auto max-w-2xl px-4 sm:px-8 py-24 text-center">

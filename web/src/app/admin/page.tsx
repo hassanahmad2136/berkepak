@@ -1,32 +1,35 @@
 import Link from "next/link";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/components/SetupNotice";
+import { queryOne } from "@/lib/db";
+import { isDatabaseConfigured } from "@/components/SetupNotice";
 
 export default async function AdminOverviewPage() {
-  if (!isSupabaseConfigured()) return null;
-  const admin = createSupabaseAdmin();
+  if (!isDatabaseConfigured()) return null;
 
-  const [{ count: pendingReceipts }, { count: awaitingUpload }, { count: openOrders }] =
-    await Promise.all([
-      admin.from("receipts").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      admin
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("payment_method", "bank_transfer")
-        .eq("payment_status", "awaiting_receipt"),
-      admin
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["unconfirmed", "confirmed", "fulfilled"]),
-    ]);
+  // Store-wide counts: admin views are deliberately not user-scoped.
+  const counts = await queryOne<{
+    pending_receipts: string;
+    awaiting_upload: string;
+    open_orders: string;
+  }>(
+    `select
+       (select count(*) from receipts where status = 'pending')                as pending_receipts,
+       (select count(*) from orders
+         where payment_method = 'bank_transfer'
+           and payment_status = 'awaiting_receipt')                            as awaiting_upload,
+       (select count(*) from orders
+         where status in ('unconfirmed','confirmed','fulfilled'))              as open_orders`,
+  );
+  const pendingReceipts = Number(counts?.pending_receipts ?? 0);
+  const awaitingUpload = Number(counts?.awaiting_upload ?? 0);
+  const openOrders = Number(counts?.open_orders ?? 0);
 
   return (
     <div className="space-y-10">
       <section className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: "Receipts pending review", value: pendingReceipts ?? 0, href: "/admin/receipts" },
-          { label: "Orders awaiting receipt", value: awaitingUpload ?? 0, href: "/admin/orders" },
-          { label: "Open orders", value: openOrders ?? 0, href: "/admin/orders" },
+          { label: "Receipts pending review", value: pendingReceipts, href: "/admin/receipts" },
+          { label: "Orders awaiting receipt", value: awaitingUpload, href: "/admin/orders" },
+          { label: "Open orders", value: openOrders, href: "/admin/orders" },
         ].map((s) => (
           <Link
             key={s.label}

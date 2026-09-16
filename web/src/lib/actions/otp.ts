@@ -3,7 +3,7 @@
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query, queryOne } from "@/lib/db";
 import { checkRateLimit, checkRateLimitByKey } from "@/lib/rate-limit";
 
 export type OtpResult = {
@@ -19,7 +19,7 @@ function generateSecureCode(): string {
   return String(crypto.randomInt(1000, 10000));
 }
 
-async function generateUniqueSecureCode(admin: any): Promise<string> {
+async function generateUniqueSecureCode(): Promise<string> {
   let code = "";
   let isUnique = false;
   let attempts = 0;
@@ -28,18 +28,13 @@ async function generateUniqueSecureCode(admin: any): Promise<string> {
     code = generateSecureCode();
     attempts++;
 
-    // Check if this code is already active (unconsumed and unexpired)
-    const { data, error } = await admin
-      .from("otp_codes")
-      .select("id")
-      .eq("code", code)
-      .is("consumed_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .limit(1);
-
-    if (!error && (!data || data.length === 0)) {
-      isUnique = true;
-    }
+    // Reject a code that is already live for someone else.
+    const clash = await queryOne(
+      `select id from otp_codes
+        where code = $1 and consumed_at is null and expires_at > now() limit 1`,
+      [code],
+    );
+    if (!clash) isUnique = true;
   }
 
   // Fallback to secure code if we hit retry limits (extremely unlikely)
@@ -77,14 +72,15 @@ export async function sendOtp(
     }
   }
 
-  const admin = createSupabaseAdmin();
-  const code = await generateUniqueSecureCode(admin);
-  const expires = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
+  const code = await generateUniqueSecureCode();
+  const expires = new Date(Date.now() + OTP_TTL_MINUTES * 60_000);
 
-  const { error } = await admin
-    .from("otp_codes")
-    .insert({ phone: target, code, expires_at: expires });
-  if (error) return { ok: false, error: error.message };
+  // Column is `destination` in the self-hosted schema — it holds an email
+  // address as often as a phone number.
+  await query(
+    `insert into otp_codes (destination, code, channel, expires_at) values ($1, $2, $3, $4)`,
+    [target, code, method === "email" ? "email" : "whatsapp", expires],
+  );
 
   let liveSent = false;
   let liveError = "";
@@ -228,10 +224,10 @@ export async function sendOtp(
 
     if (method === "email") {
       // eslint-disable-next-line no-console
-      console.log(`[Email OTP Simulation] Code: ${code} | Target: ${target} | Expires: ${expires}`);
+      console.log(`[Email OTP Simulation] Code: ${code} | Target: ${target} | Expires: ${expires.toISOString()}`);
     } else {
       // eslint-disable-next-line no-console
-      console.log(`[WhatsApp OTP Simulation] Code: ${code} | Target: ${target} | Expires: ${expires}`);
+      console.log(`[WhatsApp OTP Simulation] Code: ${code} | Target: ${target} | Expires: ${expires.toISOString()}`);
     }
   }
 
@@ -253,17 +249,20 @@ export async function verifyOtp(
     return { ok: false, error: rateLimit.error };
   }
 
-  const admin = createSupabaseAdmin();
-
-  const { data: rows, error } = await admin
-    .from("otp_codes")
-    .select("id, code, attempts, expires_at, consumed_at")
-    .eq("phone", target)
-    .order("created_at", { ascending: false })
-    .limit(1);
-  if (error) return { ok: false, error: error.message };
-
-  const row = rows?.[0];
+  const row = await queryOne<{
+    id: string;
+    code: string;
+    attempts: number;
+    expires_at: Date;
+    consumed_at: Date | null;
+  }>(
+    `select id, code, attempts, expires_at, consumed_at
+       from otp_codes
+      where destination = $1
+      order by created_at desc
+      limit 1`,
+    [target],
+  );
   if (!row) return { ok: false, error: "No code requested for this number." };
   if (row.consumed_at) return { ok: false, error: "Code already used." };
   if (new Date(row.expires_at) < new Date()) {
@@ -274,17 +273,10 @@ export async function verifyOtp(
   }
 
   if (row.code !== code) {
-    await admin
-      .from("otp_codes")
-      .update({ attempts: row.attempts + 1 })
-      .eq("id", row.id);
+    await query(`update otp_codes set attempts = attempts + 1 where id = $1`, [row.id]);
     return { ok: false, error: "Incorrect code." };
   }
 
-  const { error: consumeError } = await admin
-    .from("otp_codes")
-    .update({ consumed_at: new Date().toISOString() })
-    .eq("id", row.id);
-  if (consumeError) return { ok: false, error: "Failed to consume OTP. Please try again." };
+  await query(`update otp_codes set consumed_at = now() where id = $1`, [row.id]);
   return { ok: true };
 }

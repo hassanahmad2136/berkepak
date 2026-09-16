@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { createSupabaseServer } from "@/lib/supabase/server";
 import { HeaderClient } from "./HeaderClient";
-import { isSupabaseConfigured } from "./SetupNotice";
 import { getProducts } from "@/lib/products";
-import { isCurrentUserAdmin } from "@/lib/admin";
+import { unstable_rethrow } from "next/navigation";
+import { getCurrentUserWithRole } from "@/lib/auth/guards";
 
 const NAV_LINKS = [
   { href: "/shop", label: "Shop All" },
@@ -12,21 +11,28 @@ const NAV_LINKS = [
 export async function Header() {
   let signedIn = false;
   let isAdmin = false;
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = await createSupabaseServer();
-      const { data } = await supabase.auth.getUser();
-      signedIn = !!data.user;
-      if (signedIn) {
-        isAdmin = await isCurrentUserAdmin();
-      }
-    } catch {
-      signedIn = false;
-    }
+  try {
+    const { user, admin } = await getCurrentUserWithRole();
+    signedIn = !!user;
+    isAdmin = admin;
+  } catch (err) {
+    // Next signals "this route must be dynamic" by throwing; swallowing that
+    // would let a signed-out header be cached for everyone.
+    unstable_rethrow(err);
+    console.error("Header: failed to resolve session:", err);
   }
 
   // Fetch all products for search and map to a lightweight data structure
-  let searchableProducts: any[] = [];
+  let searchableProducts: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    weave: string;
+    composition: string;
+    pricePerSuit: number;
+    image: string;
+  }> = [];
   try {
     const rawProducts = await getProducts();
     searchableProducts = (rawProducts ?? []).map((p) => ({

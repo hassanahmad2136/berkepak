@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { SignupForm } from "./SignupForm";
-import { SocialAuthButtons } from "@/components/SocialAuthButtons";
-import { isSupabaseConfigured, SetupNotice } from "@/components/SetupNotice";
+import { isDatabaseConfigured, SetupNotice } from "@/components/SetupNotice";
 
 export default function SignupPage() {
-  if (!isSupabaseConfigured()) return <SetupNotice feature="Sign up" />;
+  if (!isDatabaseConfigured()) return <SetupNotice feature="Sign up" />;
 
   return (
     <div className="mx-auto max-w-md px-4 sm:px-8 py-20">
@@ -15,12 +14,6 @@ export default function SignupPage() {
       </p>
 
       <SignupForm />
-
-      <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-muted">
-        <span className="h-px flex-1 bg-stone" /> or <span className="h-px flex-1 bg-stone" />
-      </div>
-
-      <SocialAuthButtons />
 
       <p className="mt-8 text-center text-sm text-muted">
         Already have an account?{" "}

@@ -1,12 +1,26 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/guards";
+import { query } from "@/lib/db";
 
 export default async function AddressesPage() {
-  const supabase = await createSupabaseServer();
-  const { data: addresses } = await supabase
-    .from("addresses")
-    .select("*")
-    .order("is_default", { ascending: false })
-    .order("created_at", { ascending: false });
+  const user = await requireUser("/account/addresses");
+  const addresses = await query<{
+    id: string;
+    full_name: string;
+    phone: string;
+    line1: string;
+    line2: string | null;
+    city: string;
+    province: string;
+    postal_code: string;
+    country: string;
+    is_default: boolean;
+  }>(
+    `select id, full_name, phone, line1, line2, city, province, postal_code, country, is_default
+       from addresses
+      where user_id = $1
+      order by is_default desc, created_at desc`,
+    [user.id],
+  );
 
   return (
     <div>

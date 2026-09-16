@@ -1,32 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/guards";
+import { query } from "@/lib/db";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
 
 export async function saveProfile(formData: FormData): Promise<SaveResult> {
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { ok: false, error: "Not signed in." };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: String(formData.get("fullName") ?? ""),
-      phone: String(formData.get("phone") ?? ""),
-    })
-    .eq("id", userData.user.id);
-  if (error) return { ok: false, error: error.message };
+  await query(
+    `update users set full_name = $1, phone = $2 where id = $3`,
+    [String(formData.get("fullName") ?? ""), String(formData.get("phone") ?? ""), user.id],
+  );
 
   revalidatePath("/account/profile");
   return { ok: true };
 }
 
 export async function saveMeasurements(formData: FormData): Promise<SaveResult> {
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { ok: false, error: "Not signed in." };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
 
   const num = (k: string) => {
     const v = formData.get(k);
@@ -35,16 +30,14 @@ export async function saveMeasurements(formData: FormData): Promise<SaveResult> 
     return Number.isFinite(n) ? n : null;
   };
 
-  const { error } = await supabase.from("measurements").upsert({
-    user_id: userData.user.id,
-    chest: num("chest"),
-    shoulder: num("shoulder"),
-    length: num("length"),
-    sleeve: num("sleeve"),
-    neck: num("neck"),
-    waist: num("waist"),
-  });
-  if (error) return { ok: false, error: error.message };
+  await query(
+    `insert into measurements (user_id, chest, shoulder, length, sleeve, neck, waist)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     on conflict (user_id) do update set
+       chest = excluded.chest, shoulder = excluded.shoulder, length = excluded.length,
+       sleeve = excluded.sleeve, neck = excluded.neck, waist = excluded.waist`,
+    [user.id, num("chest"), num("shoulder"), num("length"), num("sleeve"), num("neck"), num("waist")],
+  );
 
   revalidatePath("/account/profile");
   return { ok: true };

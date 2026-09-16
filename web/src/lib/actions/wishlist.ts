@@ -1,31 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/guards";
+import { query, queryOne } from "@/lib/db";
 
 export async function toggleWishlist(productId: string) {
-  const supabase = await createSupabaseServer();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { ok: false, error: "Sign in to save items." };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sign in to save items." };
 
-  const { data: existing } = await supabase
-    .from("wishlist")
-    .select("product_id")
-    .eq("user_id", userData.user.id)
-    .eq("product_id", productId)
-    .maybeSingle();
+  const existing = await queryOne<{ product_id: string }>(
+    `select product_id from wishlist where user_id = $1 and product_id = $2`,
+    [user.id, productId],
+  );
 
   if (existing) {
-    await supabase
-      .from("wishlist")
-      .delete()
-      .eq("user_id", userData.user.id)
-      .eq("product_id", productId);
+    await query(`delete from wishlist where user_id = $1 and product_id = $2`, [
+      user.id,
+      productId,
+    ]);
   } else {
-    await supabase
-      .from("wishlist")
-      .insert({ user_id: userData.user.id, product_id: productId });
+    await query(
+      `insert into wishlist (user_id, product_id) values ($1, $2)
+       on conflict do nothing`,
+      [user.id, productId],
+    );
   }
+
   revalidatePath("/account/wishlist");
   return { ok: true, saved: !existing };
 }

@@ -9,7 +9,6 @@ import {
   type SaleUnit,
   type Stitching,
 } from "./types";
-import { getProductById, getProductBySlug } from "./products";
 
 interface CartState {
   lines: CartLine[];
@@ -152,11 +151,10 @@ export const useCart = create<CartState>()(
   ),
 );
 
+// The caller resolves products (via lib/actions/catalog) and passes them in;
+// this module is client-side and can no longer reach the database itself.
 export function lineSubtotal(line: CartLine, resolvedProduct?: Product): number {
-  const product =
-    resolvedProduct ??
-    getProductById(line.productId) ??
-    (line.productSlug ? getProductBySlug(line.productSlug) : undefined);
+  const product = resolvedProduct;
   if (!product) return 0;
   // Prefer discounted price stored at add-to-cart time; fall back to live product price.
   const unitPrice =

@@ -1,39 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock supabase server module before importing the module under test
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServer: vi.fn(),
-  createSupabaseAdmin: vi.fn(),
+// The db module is server-only and opens a real pool; stub it before import.
+vi.mock("@/lib/db", () => ({
+  query: vi.fn(),
+  queryOne: vi.fn(),
+  transaction: vi.fn(),
+  pool: {},
 }));
 
-import { isCurrentUserAdmin, isAdminEmail } from "@/lib/admin";
-import { createSupabaseServer, createSupabaseAdmin } from "@/lib/supabase/server";
+vi.mock("@/lib/auth/session", () => ({
+  readSession: vi.fn(),
+  SESSION_COOKIE: "bp_session",
+}));
 
-const mockCreateSupabaseServer = vi.mocked(createSupabaseServer);
-const mockCreateSupabaseAdmin = vi.mocked(createSupabaseAdmin);
+import { isAdmin, isAdminEmail } from "@/lib/auth/guards";
+import { queryOne } from "@/lib/db";
 
-// Helper to build a mock Supabase server client
-function makeServerClient(user: { id: string; email?: string } | null) {
-  return {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
-    },
-  } as any;
-}
+const mockQueryOne = vi.mocked(queryOne);
 
-// Helper to build a mock admin client with a chainable query builder
-function makeAdminClient(result: { data: any; error: any }) {
-  const chain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue(result),
-  };
-  return {
-    from: vi.fn().mockReturnValue(chain),
-  } as any;
-}
+const user = (email: string) => ({
+  id: "11111111-1111-4111-8111-111111111111",
+  email,
+  fullName: null,
+  phone: null,
+  emailVerifiedAt: new Date(),
+});
 
 describe("isAdminEmail", () => {
+  beforeEach(() => {
+    delete process.env.ADMIN_EMAILS;
+  });
+
   it("returns false for null email", () => {
     expect(isAdminEmail(null)).toBe(false);
   });
@@ -41,85 +38,41 @@ describe("isAdminEmail", () => {
   it("returns false for undefined email", () => {
     expect(isAdminEmail(undefined)).toBe(false);
   });
+
+  it("matches allowlisted addresses case-insensitively", () => {
+    process.env.ADMIN_EMAILS = "Boss@berkepak.test, other@berkepak.test";
+    expect(isAdminEmail("boss@BERKEPAK.test")).toBe(true);
+  });
+
+  it("returns false for an address not on the list", () => {
+    process.env.ADMIN_EMAILS = "boss@berkepak.test";
+    expect(isAdminEmail("customer@berkepak.test")).toBe(false);
+  });
 });
 
-describe("isCurrentUserAdmin", () => {
+describe("isAdmin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset ADMIN_EMAILS so tests are deterministic
     delete process.env.ADMIN_EMAILS;
   });
 
-  it("returns false when no user is authenticated", async () => {
-    mockCreateSupabaseServer.mockResolvedValue(makeServerClient(null));
-    // Admin client won't be called, but set it up anyway
-    mockCreateSupabaseAdmin.mockReturnValue(makeAdminClient({ data: null, error: null }));
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(false);
+  it("returns false when nobody is signed in", async () => {
+    expect(await isAdmin(null)).toBe(false);
   });
 
-  it("returns true when user email is in ADMIN_EMAILS list", async () => {
-    process.env.ADMIN_EMAILS = "admin@berkepak.com,super@berkepak.com";
-    mockCreateSupabaseServer.mockResolvedValue(
-      makeServerClient({ id: "user-1", email: "admin@berkepak.com" }),
-    );
-    // Admin client shouldn't be called because email check short-circuits
-    mockCreateSupabaseAdmin.mockReturnValue(makeAdminClient({ data: null, error: null }));
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(true);
+  it("grants access via the ADMIN_EMAILS allowlist without touching the database", async () => {
+    process.env.ADMIN_EMAILS = "boss@berkepak.test";
+    expect(await isAdmin(user("boss@berkepak.test"))).toBe(true);
+    expect(mockQueryOne).not.toHaveBeenCalled();
   });
 
-  it("returns false when user email is NOT in ADMIN_EMAILS", async () => {
-    process.env.ADMIN_EMAILS = "admin@berkepak.com";
-    mockCreateSupabaseServer.mockResolvedValue(
-      makeServerClient({ id: "user-2", email: "regular@example.com" }),
-    );
-    // admin_users lookup also finds nothing
-    mockCreateSupabaseAdmin.mockReturnValue(makeAdminClient({ data: null, error: null }));
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(false);
+  it("grants access via an admin_users row", async () => {
+    mockQueryOne.mockResolvedValue({ user_id: "11111111-1111-4111-8111-111111111111" });
+    expect(await isAdmin(user("customer@berkepak.test"))).toBe(true);
   });
 
-  it("returns true when user_id is found in admin_users table", async () => {
-    process.env.ADMIN_EMAILS = ""; // empty list — email check won't pass
-    mockCreateSupabaseServer.mockResolvedValue(
-      makeServerClient({ id: "db-admin-user", email: "someuser@example.com" }),
-    );
-    // admin_users lookup returns a row
-    mockCreateSupabaseAdmin.mockReturnValue(
-      makeAdminClient({ data: { user_id: "db-admin-user" }, error: null }),
-    );
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(true);
-  });
-
-  it("returns false when admin_users lookup returns an error", async () => {
-    process.env.ADMIN_EMAILS = "";
-    mockCreateSupabaseServer.mockResolvedValue(
-      makeServerClient({ id: "user-3", email: "user@example.com" }),
-    );
-    mockCreateSupabaseAdmin.mockReturnValue(
-      makeAdminClient({ data: null, error: { message: "DB connection error" } }),
-    );
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(false);
-  });
-
-  it("returns false when admin_users lookup returns null (not found)", async () => {
-    process.env.ADMIN_EMAILS = "";
-    mockCreateSupabaseServer.mockResolvedValue(
-      makeServerClient({ id: "user-4", email: "user@example.com" }),
-    );
-    mockCreateSupabaseAdmin.mockReturnValue(
-      makeAdminClient({ data: null, error: null }),
-    );
-
-    const result = await isCurrentUserAdmin();
-    expect(result).toBe(false);
+  it("denies a user who is on neither", async () => {
+    mockQueryOne.mockResolvedValue(null);
+    expect(await isAdmin(user("customer@berkepak.test"))).toBe(false);
   });
 });

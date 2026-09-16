@@ -3,29 +3,28 @@ import Image from "next/image"; // still used in fabricOfMonth
 import { fabricImage } from "@/lib/placeholder";
 import { ProductCard } from "@/components/ProductCard";
 import { getNewArrivalsAsync, getFeaturedAsync } from "@/lib/products";
-import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { getActiveCampaigns } from "@/lib/campaigns.server";
 import { HeroSlideshow } from "@/components/HeroSlideshow";
 import { PromotionPopup } from "@/components/PromotionPopup";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 
 export default async function HomePage() {
-  const now = new Date().toISOString();
-  const [newArrivals, featured, campaigns, bannersRes] = await Promise.all([
+  const [newArrivals, featured, campaigns, banners] = await Promise.all([
     getNewArrivalsAsync(),
     getFeaturedAsync(),
     getActiveCampaigns(),
-    createSupabaseAdmin()
-      .from("promotions")
-      .select("id, title, body")
-      .eq("type", "banner")
-      .eq("is_active", true)
-      .or(`starts_at.is.null,starts_at.lte.${now}`)
-      .or(`ends_at.is.null,ends_at.gte.${now}`)
-      .order("created_at", { ascending: false })
-      .limit(1),
+    query<{ id: string; title: string; body: string | null }>(
+      `select id, title, body
+         from promotions
+        where type = 'banner'
+          and is_active = true
+          and (starts_at is null or starts_at <= now())
+          and (ends_at   is null or ends_at   >= now())
+        order by created_at desc
+        limit 1`,
+    ),
   ]);
-
-  const banners = (bannersRes.data ?? []) as Array<{ id: string; title: string; body: string | null }>;
   const fabricOfMonth = featured[0];
 
   return (

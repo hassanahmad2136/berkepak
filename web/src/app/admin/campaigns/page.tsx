@@ -1,4 +1,4 @@
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { CampaignsDashboardClient } from "./CampaignsDashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -25,29 +25,32 @@ export type ProductPickerItem = {
 };
 
 export default async function CampaignsPage() {
-  const admin = createSupabaseAdmin();
+  let campaigns: CampaignRecord[] = [];
+  let products: ProductPickerItem[] = [];
+  let fetchError: string | null = null;
 
-  const [campaignsRes, productsRes] = await Promise.all([
-    admin
-      .from("campaigns")
-      .select("id, name, discount_type, discount_value, scope, category_targets, product_targets, priority, is_active, starts_at, ends_at, created_at")
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: false }),
-    admin
-      .from("product_catalog")
-      .select("id, name, category")
-      .eq("is_active", true)
-      .order("name", { ascending: true }),
-  ]);
-
-  const campaigns = (campaignsRes.data ?? []) as CampaignRecord[];
-  const products = (productsRes.data ?? []) as ProductPickerItem[];
+  try {
+    [campaigns, products] = await Promise.all([
+      query(
+        `select id, name, discount_type, discount_value, scope, category_targets,
+                product_targets, priority, is_active, starts_at, ends_at, created_at
+           from campaigns
+          order by priority desc, created_at desc`,
+      ) as unknown as Promise<CampaignRecord[]>,
+      query(
+        `select id, name, category from product_catalog
+          where is_active = true order by name asc`,
+      ) as unknown as Promise<ProductPickerItem[]>,
+    ]);
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : "Failed to load campaigns.";
+  }
 
   return (
     <CampaignsDashboardClient
       campaigns={campaigns}
       products={products}
-      fetchError={campaignsRes.error?.message ?? null}
+      fetchError={fetchError}
     />
   );
 }

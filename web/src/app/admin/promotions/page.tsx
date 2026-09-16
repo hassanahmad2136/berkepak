@@ -1,4 +1,4 @@
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { PromotionsDashboardClient } from "./PromotionsDashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +19,18 @@ export type PromotionRow = {
 };
 
 export default async function PromotionsPage() {
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("promotions")
-    .select("id, type, title, body, code, discount_type, discount_value, min_order_amount, is_active, starts_at, ends_at, created_at")
-    .order("created_at", { ascending: false });
+  let promotions: PromotionRow[] = [];
+  let fetchError: string | null = null;
+  try {
+    promotions = (await query(
+      `select id, type, title, body, code, discount_type, discount_value,
+              min_order_amount, is_active, starts_at, ends_at, created_at
+         from promotions
+        order by created_at desc`,
+    )) as unknown as PromotionRow[];
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : "Failed to load promotions.";
+  }
 
-  const promotions: PromotionRow[] = (data as PromotionRow[]) ?? [];
-
-  return <PromotionsDashboardClient promotions={promotions} fetchError={error?.message ?? null} />;
+  return <PromotionsDashboardClient promotions={promotions} fetchError={fetchError} />;
 }

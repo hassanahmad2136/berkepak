@@ -1,27 +1,33 @@
 import Link from "next/link";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/guards";
+import { queryOne } from "@/lib/db";
 
 export default async function AccountOverviewPage() {
-  const supabase = await createSupabaseServer();
+  const user = await requireUser("/account");
 
-  const [{ count: openOrders }, { count: awaitingReceipt }, { count: wishlistCount }] =
-    await Promise.all([
-      supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["unconfirmed", "confirmed", "fulfilled", "shipped"]),
-      supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("payment_method", "bank_transfer")
-        .in("payment_status", ["awaiting_receipt", "awaiting_review"]),
-      supabase.from("wishlist").select("product_id", { count: "exact", head: true }),
-    ]);
+  // Every count is scoped to the signed-in user. These queries previously had no
+  // user predicate at all and leaned entirely on RLS to filter them.
+  const counts = await queryOne<{
+    open_orders: string;
+    awaiting_receipt: string;
+    wishlist: string;
+  }>(
+    `select
+       (select count(*) from orders
+         where user_id = $1
+           and status in ('unconfirmed','confirmed','fulfilled','shipped'))       as open_orders,
+       (select count(*) from orders
+         where user_id = $1
+           and payment_method = 'bank_transfer'
+           and payment_status in ('awaiting_receipt','awaiting_review'))          as awaiting_receipt,
+       (select count(*) from wishlist where user_id = $1)                         as wishlist`,
+    [user.id],
+  );
 
   const stats = [
-    { label: "Open Orders", value: openOrders ?? 0 },
-    { label: "Awaiting Receipt / Review", value: awaitingReceipt ?? 0 },
-    { label: "Wishlist", value: wishlistCount ?? 0 },
+    { label: "Open Orders", value: Number(counts?.open_orders ?? 0) },
+    { label: "Awaiting Receipt / Review", value: Number(counts?.awaiting_receipt ?? 0) },
+    { label: "Wishlist", value: Number(counts?.wishlist ?? 0) },
   ];
 
   return (

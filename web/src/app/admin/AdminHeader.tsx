@@ -17,7 +17,7 @@ const HEADER_MAP: Record<string, { title: string; desc: string }> = {
   },
   "/admin/pricing": {
     title: "Pricing Management Hub",
-    desc: "Configure raw suit prices, apply percentage discounts, or adjust prices in bulk. Pricing is managed exclusively in Supabase.",
+    desc: "Configure raw suit prices, apply percentage discounts, or adjust prices in bulk. Pricing is managed directly in the product catalog.",
   },
   "/admin/stock": {
     title: "Stock & Inventory Control",

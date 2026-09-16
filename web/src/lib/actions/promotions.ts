@@ -1,15 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
-import { isCurrentUserAdmin } from "@/lib/admin";
+import { query, queryOne } from "@/lib/db";
+import { getCurrentUser, isAdmin } from "@/lib/auth/guards";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 async function requireAdmin(): Promise<ActionResult> {
-  const isAdmin = await isCurrentUserAdmin();
-  if (!isAdmin) return { ok: false, error: "Not an admin." };
+  const user = await getCurrentUser();
+  if (!(await isAdmin(user))) return { ok: false, error: "Not an admin." };
   return { ok: true };
 }
 
@@ -38,45 +38,45 @@ export async function createPromotion(input: CreatePromotionInput): Promise<Acti
     if (input.discountType === "pct" && input.discountValue > 100) return { ok: false, error: "Percentage discount cannot exceed 100." };
   }
 
-  const admin = createSupabaseAdmin();
-  const { data, error } = await admin
-    .from("promotions")
-    .insert({
-      type: input.type,
-      title: input.title.trim(),
-      body: input.body?.trim() || null,
-      code: input.type === "coupon" ? input.code!.toUpperCase().trim() : null,
-      discount_type: input.discountType ?? null,
-      discount_value: input.discountValue ?? null,
-      min_order_amount: input.minOrderAmount ?? 0,
-      is_active: input.isActive,
-      starts_at: input.startsAt || null,
-      ends_at: input.endsAt || null,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    if (error.code === "23505") return { ok: false, error: "Promo code already exists." };
-    return { ok: false, error: error.message };
+  let created: { id: string } | null;
+  try {
+    created = await queryOne<{ id: string }>(
+      `insert into promotions
+         (type, title, body, code, discount_type, discount_value,
+          min_order_amount, is_active, starts_at, ends_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       returning id`,
+      [
+        input.type,
+        input.title.trim(),
+        input.body?.trim() || null,
+        input.type === "coupon" ? input.code!.toUpperCase().trim() : null,
+        input.discountType ?? null,
+        input.discountValue ?? null,
+        input.minOrderAmount ?? 0,
+        input.isActive,
+        input.startsAt || null,
+        input.endsAt || null,
+      ],
+    );
+  } catch (err) {
+    // 23505 = unique_violation on the promotions.code index.
+    const code = (err as { code?: string }).code;
+    if (code === "23505") return { ok: false, error: "Promo code already exists." };
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+  if (!created) return { ok: false, error: "Promotion could not be created." };
 
   revalidatePath("/admin/promotions");
   revalidatePath("/");
-  return { ok: true, id: data.id };
+  return { ok: true, id: created.id };
 }
 
 export async function togglePromotion(id: string, isActive: boolean): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("promotions")
-    .update({ is_active: isActive })
-    .eq("id", id);
-
-  if (error) return { ok: false, error: error.message };
+  await query(`update promotions set is_active = $1 where id = $2`, [isActive, id]);
 
   revalidatePath("/admin/promotions");
   revalidatePath("/");
@@ -87,13 +87,7 @@ export async function deletePromotion(id: string): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("promotions")
-    .delete()
-    .eq("id", id);
-
-  if (error) return { ok: false, error: error.message };
+  await query(`delete from promotions where id = $1`, [id]);
 
   revalidatePath("/admin/promotions");
   revalidatePath("/");
@@ -115,16 +109,21 @@ export async function validateCoupon(
 
   if (!code.trim()) return { ok: false, error: "Enter a promo code." };
 
-  const admin = createSupabaseAdmin();
-  const { data: promo, error } = await admin
-    .from("promotions")
-    .select("id, discount_type, discount_value, min_order_amount, is_active, starts_at, ends_at")
-    .eq("code", code.toUpperCase().trim())
-    .eq("type", "coupon")
-    .eq("is_active", true)
-    .maybeSingle();
+  const promo = await queryOne<{
+    id: string;
+    discount_type: string;
+    discount_value: string;
+    min_order_amount: string;
+    starts_at: Date | null;
+    ends_at: Date | null;
+  }>(
+    `select id, discount_type, discount_value, min_order_amount, starts_at, ends_at
+       from promotions
+      where upper(code) = upper($1) and type = 'coupon' and is_active = true`,
+    [code.trim()],
+  );
 
-  if (error || !promo) return { ok: false, error: "Invalid or expired promo code." };
+  if (!promo) return { ok: false, error: "Invalid or expired promo code." };
 
   const now = new Date();
   if (promo.starts_at && new Date(promo.starts_at) > now) {

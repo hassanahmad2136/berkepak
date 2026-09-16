@@ -3,8 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
-import { getActiveCampaigns, getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
-import { getProductByIdAsync } from "@/lib/products";
+import { getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
+import { fetchProducts, fetchActiveCampaigns } from "@/lib/actions/catalog";
 import { formatPKR } from "@/lib/format";
 import { fabricImage } from "@/lib/placeholder";
 import { useEffect, useState } from "react";
@@ -24,10 +24,10 @@ export function CartDrawer() {
   useEffect(() => {
     if (lines.length === 0) return;
     const ids = [...new Set(lines.map((l) => l.productId))];
-    Promise.all(ids.map((id) => getProductByIdAsync(id))).then((results) => {
+    fetchProducts(ids).then((results) => {
       setProductMap((prev) => {
         const next = new Map(prev);
-        results.forEach((p, i) => { if (p) next.set(ids[i], p); });
+        results.forEach((p) => next.set(p.id, p));
         return next;
       });
     });
@@ -41,7 +41,7 @@ export function CartDrawer() {
     const allLoaded = lines.every((l) => productMap.has(l.productId));
     if (!allLoaded) return;
 
-    getActiveCampaigns().then((campaigns) => {
+    fetchActiveCampaigns().then((campaigns) => {
       lines.forEach((line) => {
         const product = productMap.get(line.productId);
         if (!product) return;
