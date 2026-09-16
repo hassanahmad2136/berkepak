@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/guards";
+import { query } from "@/lib/db";
 import { formatPKR } from "@/lib/format";
+import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/lib/payment-labels";
 
 const STATUS_LABEL: Record<string, string> = {
   unconfirmed: "Unconfirmed",
@@ -11,21 +13,22 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const PAYMENT_LABEL: Record<string, string> = {
-  pending: "Pending",
-  awaiting_receipt: "Awaiting receipt upload",
-  awaiting_review: "Awaiting our review",
-  approved: "Approved",
-  paid: "Paid",
-  refunded: "Refunded",
-};
-
 export default async function OrdersPage() {
-  const supabase = await createSupabaseServer();
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, status, payment_method, payment_status, total, created_at")
-    .order("created_at", { ascending: false });
+  const user = await requireUser("/account/orders");
+  const orders = await query<{
+    id: string;
+    status: string;
+    payment_method: string;
+    payment_status: string;
+    total: string;
+    created_at: Date;
+  }>(
+    `select id, status, payment_method, payment_status, total, created_at
+       from orders
+      where user_id = $1
+      order by created_at desc`,
+    [user.id],
+  );
 
   if (!orders || orders.length === 0) {
     return (
@@ -53,8 +56,8 @@ export default async function OrdersPage() {
               <p className="mt-1 text-xs text-muted">
                 {new Date(o.created_at).toLocaleDateString()} ·{" "}
                 {STATUS_LABEL[o.status] ?? o.status} ·{" "}
-                {o.payment_method === "cod" ? "Cash on Delivery" : "Bank Transfer"} —{" "}
-                {PAYMENT_LABEL[o.payment_status] ?? o.payment_status}
+                {PAYMENT_METHOD_LABEL[o.payment_method] ?? o.payment_method} —{" "}
+                {PAYMENT_STATUS_LABEL[o.payment_status] ?? o.payment_status}
               </p>
             </div>
             <div className="text-right">
@@ -65,7 +68,7 @@ export default async function OrdersPage() {
                     href="/account/receipts"
                     className="link-underline mt-1 inline-block text-xs"
                   >
-                    Upload receipt →
+                    Send transfer details →
                   </Link>
                 )}
             </div>

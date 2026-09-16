@@ -1,35 +1,53 @@
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { query, queryOne } from "@/lib/db";
+import { signedUrl } from "@/lib/storage";
 import { ReceiptRow } from "./ReceiptRow";
 import { formatPKR } from "@/lib/format";
-import { isSupabaseConfigured } from "@/components/SetupNotice";
+import { isDatabaseConfigured } from "@/components/SetupNotice";
 
 export default async function AdminReceiptsPage(props: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  if (!isSupabaseConfigured()) return null;
+  if (!isDatabaseConfigured()) return null;
   const { status = "pending" } = await props.searchParams;
-  const admin = createSupabaseAdmin();
+  const receipts = await query<{
+    id: string;
+    order_id: string | null;
+    user_id: string;
+    status: string;
+    storage_path: string;
+    transaction_id: string | null;
+    note: string | null;
+    created_at: Date;
+    reviewed_at: Date | null;
+  }>(
+    `select id, order_id, user_id, status, storage_path, transaction_id, note, created_at, reviewed_at
+       from receipts
+      where status = $1
+      order by created_at desc`,
+    [status],
+  );
 
-  const { data: receipts } = await admin
-    .from("receipts")
-    .select(
-      "id, order_id, user_id, status, storage_path, notes, created_at, reviewed_at",
-    )
-    .eq("status", status)
-    .order("created_at", { ascending: false });
-
-  // Fan out to fetch each receipt's order summary + signed download URL.
+  // Fan out for each receipt's order summary and a short-lived download URL.
   const enriched = await Promise.all(
-    (receipts ?? []).map(async (r) => {
-      const [{ data: order }, { data: signed }] = await Promise.all([
-        admin
-          .from("orders")
-          .select("id, total, payment_status, status, shipping_address")
-          .eq("id", r.order_id)
-          .maybeSingle(),
-        admin.storage.from("receipts").createSignedUrl(r.storage_path, 60 * 10),
+    receipts.map(async (r) => {
+      const [order, url] = await Promise.all([
+        r.order_id
+          ? queryOne(
+              `select id, total, payment_status, status, shipping_address
+                 from orders where id = $1`,
+              [r.order_id],
+            )
+          : Promise.resolve(null),
+        signedUrl("receipts", r.storage_path).catch(() => null),
       ]);
-      return { ...r, order, signedUrl: signed?.signedUrl ?? null };
+      return {
+        ...r,
+        order_id: r.order_id ?? "",
+        created_at: r.created_at.toISOString(),
+        notes: r.note,
+        order,
+        signedUrl: url,
+      };
     }),
   );
 
@@ -67,6 +85,7 @@ export default async function AdminReceiptsPage(props: {
               key={r.id}
               id={r.id}
               orderId={r.order_id}
+              transactionId={r.transaction_id}
               status={r.status}
               notes={r.notes}
               signedUrl={r.signedUrl}

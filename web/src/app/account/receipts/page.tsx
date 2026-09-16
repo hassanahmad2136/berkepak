@@ -1,4 +1,5 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/guards";
+import { query } from "@/lib/db";
 import { ReceiptUploadForm } from "./ReceiptUploadForm";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -8,31 +9,46 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function ReceiptsPage() {
-  const supabase = await createSupabaseServer();
-  const { data: receipts } = await supabase
-    .from("receipts")
-    .select("id, order_id, status, created_at, notes")
-    .order("created_at", { ascending: false });
-  const { data: pendingOrders } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("payment_method", "bank_transfer")
-    .eq("payment_status", "awaiting_receipt")
-    .order("created_at", { ascending: false });
+  const user = await requireUser("/account/receipts");
+
+  const receipts = await query<{
+    id: string;
+    order_id: string | null;
+    status: string;
+    created_at: Date;
+    note: string | null;
+    transaction_id: string | null;
+  }>(
+    `select id, order_id, status, created_at, note, transaction_id
+       from receipts
+      where user_id = $1
+      order by created_at desc`,
+    [user.id],
+  );
+
+  const pendingOrders = await query<{ id: string }>(
+    `select id from orders
+      where user_id = $1
+        and payment_method = 'bank_transfer'
+        and payment_status = 'awaiting_receipt'
+      order by created_at desc`,
+    [user.id],
+  );
 
   return (
     <div>
-      <h2 className="display text-2xl">Bank transfer receipts</h2>
+      <h2 className="display text-2xl">Bank transfer details</h2>
       <p className="mt-2 text-sm text-muted">
-        Upload a screenshot of your transfer. Our team will verify it within 1
-        business day and release your order to fulfillment.
+        Send the transaction ID from your bank app and a screenshot of the
+        transfer. Our team matches it within 1 business day and releases your
+        order to fulfillment.
       </p>
 
-      <ReceiptUploadForm pendingOrderIds={pendingOrders?.map((o) => o.id) ?? []} />
+      <ReceiptUploadForm pendingOrderIds={pendingOrders.map((o) => o.id)} />
 
       <section className="mt-12">
         <h3 className="eyebrow text-muted">Submitted receipts</h3>
-        {!receipts || receipts.length === 0 ? (
+        {receipts.length === 0 ? (
           <p className="mt-3 text-sm text-muted">No receipts uploaded yet.</p>
         ) : (
           <ul className="mt-3 divide-y divide-stone border border-stone">
@@ -43,9 +59,12 @@ export default async function ReceiptsPage() {
               >
                 <div>
                   <p className="text-sm">{r.order_id}</p>
+                  {r.transaction_id && (
+                    <p className="text-xs text-muted font-mono">TID {r.transaction_id}</p>
+                  )}
                   <p className="mt-0.5 text-xs text-muted">
                     {new Date(r.created_at).toLocaleString()}
-                    {r.notes ? ` · ${r.notes}` : ""}
+                    {r.note ? ` · ${r.note}` : ""}
                   </p>
                 </div>
                 <span className="text-xs uppercase tracking-[0.14em]">

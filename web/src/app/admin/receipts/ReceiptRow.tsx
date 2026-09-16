@@ -6,6 +6,7 @@ import { approveReceipt, rejectReceipt } from "@/lib/actions/admin";
 type Props = {
   id: string;
   orderId: string;
+  transactionId: string | null;
   status: string;
   notes: string | null;
   signedUrl: string | null;
@@ -53,6 +54,13 @@ export function ReceiptRow(p: Props) {
 
         <div className="text-sm">
           <p className="font-medium">{p.orderId}</p>
+          <p className="mt-1">
+            TID{" "}
+            <span className="font-mono">{p.transactionId ?? "— (uploaded before TIDs were required)"}</span>
+          </p>
+          <p className="text-xs text-muted mt-1">
+            Match the TID and amount against the bank statement before approving.
+          </p>
           <p className="text-muted mt-1">
             {p.shippingName} · {p.orderTotal}
           </p>
