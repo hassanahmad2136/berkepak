@@ -816,7 +816,7 @@ function Confirmation({
 
       {method === "cod" && (
         <p className="mt-6 text-sm text-muted">
-          You'll receive an SMS with tracking once the order ships.
+          We&apos;ll email your tracking number once the order ships.
         </p>
       )}
 

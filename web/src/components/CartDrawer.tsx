@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCart, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
+import { useCart, cartItemCount, cartSubtotal, lineSubtotal } from "@/lib/cart-store";
 import { getCampaignForProduct, computeDiscount } from "@/lib/campaigns";
 import { fetchProducts, fetchActiveCampaigns } from "@/lib/actions/catalog";
 import { formatPKR } from "@/lib/format";
@@ -84,7 +84,8 @@ export function CartDrawer() {
         }`}
       >
         <header className="flex items-center justify-between border-b border-stone px-6 py-5">
-          <p className="eyebrow">Cart ({lines.length})</p>
+          {/* Suits, not lines — the same count the header shows. */}
+          <p className="eyebrow">Cart ({cartItemCount(lines)})</p>
           <button onClick={close} aria-label="Close cart" className="link-underline text-sm">
             Close
           </button>
