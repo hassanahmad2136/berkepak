@@ -80,6 +80,10 @@ npm run dev
 
 ## Payments
 
+- **Online payment is currently switched off.** Checkout offers direct bank
+  transfer and cash on delivery only, and prices carry no gateway fee. Set
+  `NEXT_PUBLIC_ONLINE_PAYMENTS=true` in `web/.env.local` and restart to bring
+  PayFast back.
 - **Online payment** runs through `PAYMENTS_PROVIDER`. The default, `mock`,
   simulates a gateway end to end with no money moving. Set it to `payfast` with
   `PAYFAST_MERCHANT_ID` and `PAYFAST_SECURED_KEY` to use PayFast's UAT

@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { PlaceOrderSchema } from "@/lib/validation";
 import { quoteOrder } from "@/lib/order-pricing";
 import { basisFor } from "@/lib/pricing";
+import { isOnlinePaymentEnabled } from "@/lib/payments/registry";
 import { sendOrderConfirmationEmail } from "@/lib/actions/email-actions";
 import type { Address, CartLine, PaymentMethod } from "@/lib/types";
 
@@ -43,6 +44,16 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     return { ok: false, error: parsed.error.issues[0].message };
   }
   const validInput = parsed.data;
+
+  // Hidden at checkout is not the same as refused: a stale tab or a crafted
+  // request can still send "online", and would leave an order waiting on a
+  // payment that cannot be started.
+  if (validInput.paymentMethod === "online" && !isOnlinePaymentEnabled()) {
+    return {
+      ok: false,
+      error: "Online payment is not available right now. Choose bank transfer or cash on delivery.",
+    };
+  }
 
   // Guest checkout is allowed. A signed-in customer's account email always wins
   // over anything the client sends, so a guest email cannot be used to

@@ -55,6 +55,11 @@ cd web && npm run test
   every other method is charged listed. **Never write a `Product` price back to
   the database**: it would compound the fee on every save. Admin price edits
   already go straight to SQL.
+- **Online payment is switched off** (`NEXT_PUBLIC_ONLINE_PAYMENTS`, read only
+  through `web/src/lib/online-payments.ts`). While it is off, checkout offers
+  only bank transfer and COD, `placeOrder` and `startOrderPayment` refuse
+  "online", and no gateway fee is folded into listed prices - listed equals
+  net. The PayFast code stays in place for when it is switched back on.
 - Order totals come only from `quoteOrder()` in `web/src/lib/order-pricing.ts`.
   `placeOrder` charges from it and checkout displays from it, which is what
   keeps the advertised bank-transfer saving honest. Free shipping and coupon

@@ -13,6 +13,7 @@ import {
 } from "@/lib/order-status";
 import { ReceiptUploadForm } from "@/app/account/receipts/ReceiptUploadForm";
 import { PayNowButton } from "@/components/PayNowButton";
+import { isOnlinePaymentEnabled } from "@/lib/payments/registry";
 
 /**
  * Order lookup for guests. A guest has no account, so the emailed token is how
@@ -102,7 +103,11 @@ export default async function OrderStatusPage(props: {
     (latestAttempt.status === "initiated" || latestAttempt.status === "pending") &&
     !latestAttempt.stale;
   const canPay =
-    isOnline && order.payment_status !== "paid" && status !== "cancelled" && !attemptOpen;
+    isOnlinePaymentEnabled() &&
+    isOnline &&
+    order.payment_status !== "paid" &&
+    status !== "cancelled" &&
+    !attemptOpen;
 
   return (
     <div className="mx-auto max-w-2xl px-4 sm:px-8 py-16">

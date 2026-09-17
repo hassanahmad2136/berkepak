@@ -7,11 +7,14 @@ the original Saleor backend and the later Supabase layer have been removed.
 
 ### 1. Storefront (`web/`)
 - **Framework:** Next.js (React)
-- **Features:** catalog, authentication, checkout (PayFast, direct bank
-  transfer with transaction ID + screenshot, and Cash on Delivery), and an
-  admin portal for stock, pricing, promotions and receipt approvals.
-- **Pricing:** listed prices are grossed up for the PayFast fee so it leaves
-  the stored price intact; bank transfer is charged the stored net price. See
+- **Features:** catalog, authentication, checkout (direct bank transfer with
+  transaction ID + screenshot, and Cash on Delivery; PayFast is built but
+  switched off via `NEXT_PUBLIC_ONLINE_PAYMENTS`), order fulfilment, and an
+  admin portal for orders, stock, pricing, promotions and receipt approvals.
+- **Pricing:** while online payment is on, listed prices are grossed up for
+  the PayFast fee so it leaves the stored price intact and bank transfer is
+  charged the stored net price. While it is off (the current setting), listed
+  equals the stored price for every method. See
   `src/lib/pricing.ts` and the root `CLAUDE.md`.
 - **Data:** Postgres via `pg`, accessed only from the server through
   `src/lib/db.ts`. Client components use server actions.

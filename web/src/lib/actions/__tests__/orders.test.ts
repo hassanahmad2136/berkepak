@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -70,6 +70,10 @@ const signedInUser = {
   phone: "+921234567890",
   emailVerifiedAt: new Date(),
 };
+
+// These tests exercise the fee path, so online payment is switched on here;
+// the switched-off behaviour has its own block at the end.
+process.env.NEXT_PUBLIC_ONLINE_PAYMENTS = "true";
 
 // The catalog stores the net price; the storefront and every method but bank
 // transfer charge the listed price with the gateway fee folded in.
@@ -374,5 +378,52 @@ describe("placeOrder pricing by payment method", () => {
       paymentMethod: "bank_transfer",
     });
     expect(bank.ok && bank.total).toBe(9_900 + 350);
+  });
+});
+
+describe("placeOrder with online payment switched off", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_ONLINE_PAYMENTS", "false");
+    mockCheckRateLimit.mockResolvedValue({ success: true });
+    mockGetCurrentUser.mockResolvedValue(signedInUser);
+    mockGetProductByIdAsync.mockResolvedValue(product);
+    mockQuery.mockResolvedValue([]);
+    mockQueryOne.mockResolvedValue(null);
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  const atomicCall = () =>
+    mockQuery.mock.calls.find(([sql]) => String(sql).includes("place_order_atomic"));
+
+  it("refuses an online order sent by a stale page or a crafted request", async () => {
+    const result = await placeOrder({
+      lines: [line],
+      address: validAddress,
+      paymentMethod: "online",
+    });
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/not available/i) });
+    expect(atomicCall()).toBeUndefined();
+  });
+
+  it("charges cash on delivery the stored price, with no gateway fee folded in", async () => {
+    withConsumedOtp();
+    const result = await placeOrder({
+      lines: [line],
+      address: validAddress,
+      paymentMethod: "cod",
+    });
+    expect(result.ok && result.total).toBe(NET_SUIT + 350);
+    expect((atomicCall()![1] as unknown[])[13]).toBe(0);
+  });
+
+  it("charges bank transfer the same as cash on delivery", async () => {
+    const result = await placeOrder({
+      lines: [line],
+      address: validAddress,
+      paymentMethod: "bank_transfer",
+    });
+    expect(result.ok && result.total).toBe(NET_SUIT + 350);
   });
 });

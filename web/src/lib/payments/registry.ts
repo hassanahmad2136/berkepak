@@ -2,6 +2,7 @@ import "server-only";
 import { mockProvider } from "./providers/mock";
 import { oneLinkProvider } from "./providers/onelink";
 import { payFastProvider } from "./providers/payfast";
+import { onlinePaymentsEnabled } from "@/lib/online-payments";
 import { PaymentConfigError, type PaymentProvider } from "./types";
 
 /**
@@ -36,7 +37,9 @@ export function getProvider(name?: string): PaymentProvider {
   return provider;
 }
 
+/** Whether checkout may offer online payment: switched on, and a gateway configured. */
 export function isOnlinePaymentEnabled(): boolean {
+  if (!onlinePaymentsEnabled()) return false;
   try {
     getProvider();
     return true;

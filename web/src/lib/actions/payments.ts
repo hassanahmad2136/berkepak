@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { startPayment } from "@/lib/payments/service";
-import { getProvider } from "@/lib/payments/registry";
+import { getProvider, isOnlinePaymentEnabled } from "@/lib/payments/registry";
 import { queryOne } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/guards";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -24,6 +24,10 @@ export async function startOrderPayment(
   orderId: string,
   guestToken?: string,
 ): Promise<StartPaymentResult> {
+  if (!isOnlinePaymentEnabled()) {
+    return { ok: false, error: "Online payment is not available right now." };
+  }
+
   const rl = await checkRateLimit("payment_start", 10);
   if (!rl.success) return { ok: false, error: rl.error ?? "Too many requests." };
 

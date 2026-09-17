@@ -63,7 +63,8 @@ export function CheckoutFlow({
   // Guests supply their own contact email; signed-in customers use the account's.
   const [guestEmail, setGuestEmail] = useState("");
   const contactEmail = signedIn ? userEmail : guestEmail.trim();
-  // Online payment is the default path, and the listed prices are its prices.
+  // When online payment is switched on it is the default path, and the listed
+  // prices are its prices. Otherwise bank transfer leads.
   const [payment, setPayment] = useState<PaymentMethod>(onlineEnabled ? "online" : "bank_transfer");
   const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("email");
   const [otpSent, setOtpSent] = useState(false);
